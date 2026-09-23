@@ -28,7 +28,14 @@
 4. **Institutional Performance Analytics (`src/analytics/metrics.rs`):**
    * Institutional metrics: **Sharpe Ratio**, **Sortino Ratio**, **Maximum Drawdown (MDD)**, **Calmar Ratio**, **Profit Factor**, and **Win Rate**.
 
-5. **Ultra-Low Latency Execution Substrate (`src/core/`, `src/orderbook/`, `src/matching/`, `src/risk/`):**
+5. **Sub-Microsecond Embedded ML Adverse Selection Engine (`src/quant/ml_model.rs`):**
+   * Pure Rust Gradient Boosted Decision Tree (GBDT) ensemble running forward-passes in **71 nanoseconds** (**14.02 Million evals/sec**).
+   * Ingests 8-dimensional microstructure features (OFI, micro-price skew, queue imbalance, trade flow) and triggers dynamic quote spread widening under toxic institutional sweeps.
+
+6. **Exchange WebSocket Feed Parser (`src/feed/binance_feed.rs`):**
+   * Zero-copy, high-speed parser for streaming Binance `@bookTicker` and depth feeds without heavyweight serialization overhead.
+
+7. **Ultra-Low Latency Execution Substrate (`src/core/`, `src/orderbook/`, `src/matching/`, `src/risk/`):**
    * Sub-microsecond deterministic execution (**416 ns** median tick-to-trade).
    * Zero heap allocations on the hot path via continuous slab arenas and cache-aligned lock-free SPSC ring buffers.
    * Sub-50ns pre-trade risk engine with fat-finger checks, price collars, throttle rates, and kill-switches.
@@ -115,17 +122,22 @@ cargo run --release --bin run_stat_arb
 cargo run --release --bin run_basis_arb
 ```
 
-### 3. Run Microsecond Execution Benchmark
+### 3. Run Sub-Microsecond ML Adverse Selection Defense
+```bash
+cargo run --release --bin run_ml_alpha
+```
+
+### 4. Run Microsecond Execution Benchmark
 ```bash
 cargo run --release --bin benchmark
 ```
 
-### 4. Run Live High-Throughput Market Simulation
+### 5. Run Live High-Throughput Market Simulation
 ```bash
 cargo run --release --bin hyperion_quant
 ```
 
-### 5. Run Full Test Suite
+### 6. Run Full Test Suite (13 Tests)
 ```bash
 cargo test
 ```

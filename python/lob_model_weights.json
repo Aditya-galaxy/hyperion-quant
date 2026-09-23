@@ -1,0 +1,90 @@
+{
+  "model_name": "HyperionLOBAdverseSelectionModel",
+  "version": "1.0.0",
+  "feature_names": [
+    "spread_bps",
+    "micro_price_bias_bps",
+    "imbalance_l0",
+    "imbalance_l1",
+    "ofi",
+    "returns",
+    "volatility",
+    "trade_imbalance"
+  ],
+  "learning_rate": 0.3,
+  "base_score": 0.0,
+  "trees": [
+    {
+      "feature_index": 1,
+      "threshold": 0.0,
+      "left": {
+        "feature_index": 4,
+        "threshold": -15.0,
+        "left": {
+          "value": -0.85
+        },
+        "right": {
+          "value": -0.25
+        }
+      },
+      "right": {
+        "feature_index": 4,
+        "threshold": 15.0,
+        "left": {
+          "value": 0.25
+        },
+        "right": {
+          "value": 0.85
+        }
+      }
+    },
+    {
+      "feature_index": 2,
+      "threshold": 0.0,
+      "left": {
+        "feature_index": 0,
+        "threshold": 2.5,
+        "left": {
+          "value": -0.4
+        },
+        "right": {
+          "value": -0.7
+        }
+      },
+      "right": {
+        "feature_index": 0,
+        "threshold": 2.5,
+        "left": {
+          "value": 0.4
+        },
+        "right": {
+          "value": 0.7
+        }
+      }
+    },
+    {
+      "feature_index": 7,
+      "threshold": 0.0,
+      "left": {
+        "feature_index": 6,
+        "threshold": 0.05,
+        "left": {
+          "value": -0.2
+        },
+        "right": {
+          "value": -0.5
+        }
+      },
+      "right": {
+        "feature_index": 6,
+        "threshold": 0.05,
+        "left": {
+          "value": 0.2
+        },
+        "right": {
+          "value": 0.5
+        }
+      }
+    }
+  ]
+}
