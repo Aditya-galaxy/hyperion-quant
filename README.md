@@ -2,7 +2,7 @@
 
 [![Rust](https://img.shields.io/badge/rust-v1.80+-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+[![Build Status](https://github.com/Aditya-galaxy/hyperion-quant/actions/workflows/ci.yml/badge.svg)](https://github.com/Aditya-galaxy/hyperion-quant/actions)
 [![Backtest Speed](https://img.shields.io/badge/backtest-21.2M%20bars%2Fsec-blue.svg)]()
 [![Execution Latency](https://img.shields.io/badge/tick--to--trade-416ns-purple.svg)]()
 
