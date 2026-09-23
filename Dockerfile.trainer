@@ -19,5 +19,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code and pipelines
 COPY python/ /app/python/
 
-# Default entrypoint: Run institutional model training and upload weights to GCS
-CMD ["python3", "python/train_institutional_model.py"]
+# Default entrypoint: Run SOTA Purged Cross-Validation training and export weights
+CMD ["python3", "python/train_purged_cv.py"]
