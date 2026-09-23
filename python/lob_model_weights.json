@@ -11,8 +11,9 @@
     "volatility",
     "trade_imbalance"
   ],
-  "learning_rate": 0.3,
+  "learning_rate": 1.0,
   "base_score": 0.0,
+  "out_of_sample_accuracy": 0.8954,
   "trees": [
     {
       "feature_index": 1,
