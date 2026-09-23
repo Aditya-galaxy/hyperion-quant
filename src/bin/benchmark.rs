@@ -1,12 +1,12 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use hyperion_hft::core::rng::FastRng;
-use hyperion_hft::core::types::{Nanoseconds, Price, Qty, Side};
-use hyperion_hft::matching::engine::{MatchingEngine, OrderType};
-use hyperion_hft::orderbook::lob::LimitOrderBook;
-use hyperion_hft::risk::controller::{RiskController, RiskLimits};
-use hyperion_hft::strategy::avellaneda_stoikov::{AsModelParams, AvellanedaStoikov};
+use hyperion_quant::core::rng::FastRng;
+use hyperion_quant::core::types::{Nanoseconds, Price, Qty, Side};
+use hyperion_quant::matching::engine::{MatchingEngine, OrderType};
+use hyperion_quant::orderbook::lob::LimitOrderBook;
+use hyperion_quant::risk::controller::{RiskController, RiskLimits};
+use hyperion_quant::strategy::avellaneda_stoikov::{AsModelParams, AvellanedaStoikov};
 
 fn main() {
     println!("\x1b[1;36m==================================================================\x1b[0m");

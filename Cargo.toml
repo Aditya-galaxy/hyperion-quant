@@ -1,9 +1,9 @@
 [package]
-name = "hyperion-hft"
+name = "hyperion-quant"
 version = "0.1.0"
 edition = "2021"
 authors = ["Aditya"]
-description = "Ultra-low-latency, zero-allocation HFT & Market Making engine in Rust"
+description = "High-performance Quantitative Trading & Statistical Arbitrage Platform in modern Rust"
 
 [profile.release]
 opt-level = 3

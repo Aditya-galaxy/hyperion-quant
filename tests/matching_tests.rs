@@ -1,5 +1,5 @@
-use hyperion_hft::core::types::{Nanoseconds, Price, Qty, Side};
-use hyperion_hft::matching::engine::{MatchingEngine, OrderExecutionResult, OrderType};
+use hyperion_quant::core::types::{Nanoseconds, Price, Qty, Side};
+use hyperion_quant::matching::engine::{MatchingEngine, OrderExecutionResult, OrderType};
 
 #[test]
 fn test_matching_engine_fifo_priority() {

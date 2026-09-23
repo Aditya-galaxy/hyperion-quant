@@ -1,5 +1,5 @@
-use hyperion_hft::core::types::{Nanoseconds, Price, Qty, Side};
-use hyperion_hft::orderbook::lob::{AddOrderResult, LimitOrderBook};
+use hyperion_quant::core::types::{Nanoseconds, Price, Qty, Side};
+use hyperion_quant::orderbook::lob::{AddOrderResult, LimitOrderBook};
 
 #[test]
 fn test_orderbook_bbo_and_cancel() {

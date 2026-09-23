@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "hyperion-hft"
+name = "hyperion-quant"
 version = "0.1.0"

@@ -1,5 +1,5 @@
-use hyperion_hft::core::types::{Price, Qty};
-use hyperion_hft::strategy::avellaneda_stoikov::{AsModelParams, AvellanedaStoikov};
+use hyperion_quant::core::types::{Price, Qty};
+use hyperion_quant::strategy::avellaneda_stoikov::{AsModelParams, AvellanedaStoikov};
 
 #[test]
 fn test_avellaneda_stoikov_inventory_skewing() {

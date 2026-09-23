@@ -1,5 +1,5 @@
-use hyperion_hft::core::types::{Nanoseconds, Price, Qty, Side};
-use hyperion_hft::risk::controller::{RiskController, RiskLimits, RiskRejection};
+use hyperion_quant::core::types::{Nanoseconds, Price, Qty, Side};
+use hyperion_quant::risk::controller::{RiskController, RiskLimits, RiskRejection};
 
 #[test]
 fn test_risk_fat_finger_and_collar() {
