@@ -1,6 +1,9 @@
 {
   "model_name": "HyperionLOBAdverseSelectionModel",
-  "version": "1.0.0",
+  "version": "1.2.0",
+  "validation_strategy": "PurgedGroupTimeSeriesCV_with_Embargo",
+  "cv_folds": 5,
+  "embargo_ratio": 0.02,
   "feature_names": [
     "spread_bps",
     "micro_price_bias_bps",
@@ -13,7 +16,6 @@
   ],
   "learning_rate": 1.0,
   "base_score": 0.0,
-  "out_of_sample_accuracy": 0.8954,
   "trees": [
     {
       "feature_index": 1,
