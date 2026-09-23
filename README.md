@@ -147,7 +147,7 @@ cargo test
 ## ☁️ Google Cloud Automated Retraining Pipeline
 
 The platform includes an automated serverless retraining pipeline deployed on Google Cloud:
-* **GCS Storage Bucket:** `gs://hyperion-quant-kronagent/models/`
+* **GCS Storage Bucket:** `gs://<YOUR_PROJECT_ID>-quant-models/models/`
 * **Cloud Run Job:** `hyperion-model-retrainer` (Serverless 2 vCPUs, 4GB RAM)
 * **Cloud Scheduler Cron:** `hyperion-nightly-retrain` (Triggers every night at **00:15 UTC**)
 * **Manual Trigger:**

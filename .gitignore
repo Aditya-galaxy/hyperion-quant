@@ -1,1 +1,36 @@
+# Rust target artifacts
 /target
+**/*.rs.bk
+*.pdb
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*credentials*.json
+service_account*.json
+
+# Market Data Lakes & Large Files
+data/
+*.csv
+*.zip
+*.parquet
+*.h5
+*.feather
+
+# Python Cache & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
