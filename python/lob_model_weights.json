@@ -1,6 +1,6 @@
 {
   "model_name": "HyperionLOBAdverseSelectionModel",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "validation_strategy": "PurgedGroupTimeSeriesCV_with_Embargo",
   "cv_folds": 5,
   "embargo_ratio": 0.02,
@@ -19,74 +19,53 @@
   "trees": [
     {
       "feature_index": 1,
-      "threshold": 0.0,
+      "threshold": 0.2,
       "left": {
-        "feature_index": 4,
-        "threshold": -15.0,
+        "feature_index": 1,
+        "threshold": -0.2,
         "left": {
           "value": -0.85
         },
         "right": {
-          "value": -0.25
+          "value": 0.0
         }
       },
       "right": {
-        "feature_index": 4,
-        "threshold": 15.0,
-        "left": {
-          "value": 0.25
-        },
-        "right": {
-          "value": 0.85
-        }
+        "value": 0.85
       }
     },
     {
       "feature_index": 2,
-      "threshold": 0.0,
+      "threshold": 0.15,
       "left": {
-        "feature_index": 0,
-        "threshold": 2.5,
+        "feature_index": 2,
+        "threshold": -0.15,
         "left": {
-          "value": -0.4
+          "value": -0.7
         },
         "right": {
-          "value": -0.7
+          "value": 0.0
         }
       },
       "right": {
-        "feature_index": 0,
-        "threshold": 2.5,
-        "left": {
-          "value": 0.4
-        },
-        "right": {
-          "value": 0.7
-        }
+        "value": 0.7
       }
     },
     {
-      "feature_index": 7,
-      "threshold": 0.0,
+      "feature_index": 4,
+      "threshold": 10.0,
       "left": {
-        "feature_index": 6,
-        "threshold": 0.05,
+        "feature_index": 4,
+        "threshold": -10.0,
         "left": {
-          "value": -0.2
+          "value": -0.6
         },
         "right": {
-          "value": -0.5
+          "value": 0.0
         }
       },
       "right": {
-        "feature_index": 6,
-        "threshold": 0.05,
-        "left": {
-          "value": 0.2
-        },
-        "right": {
-          "value": 0.5
-        }
+        "value": 0.6
       }
     }
   ]

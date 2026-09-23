@@ -114,62 +114,47 @@ impl DecisionTreeEnsemble {
         1.0 / (1.0 + (-raw).exp())
     }
 
-    /// Embedded default pre-trained production model (compiled weights)
+    /// Embedded default pre-trained production model (compiled weights v1.3.0)
     pub fn default_production_model() -> Self {
         let mut ensemble = Self::new(1.0, 0.0);
 
-        // Tree 1: Micro-price bias and OFI
+        // Tree 1: Micro-price bias with neutral deadband [-0.20, 0.20] bps
         let tree1 = TreeNode::Split {
-            feature_idx: 1, // micro_price_bias
-            threshold: 0.0,
+            feature_idx: 1, // micro_price_bias_bps
+            threshold: 0.20,
             left: Box::new(TreeNode::Split {
-                feature_idx: 4, // ofi
-                threshold: -15.0,
+                feature_idx: 1,
+                threshold: -0.20,
                 left: Box::new(TreeNode::Leaf { value: -0.85 }),
-                right: Box::new(TreeNode::Leaf { value: -0.25 }),
+                right: Box::new(TreeNode::Leaf { value: 0.0 }),
             }),
-            right: Box::new(TreeNode::Split {
-                feature_idx: 4, // ofi
-                threshold: 15.0,
-                left: Box::new(TreeNode::Leaf { value: 0.25 }),
-                right: Box::new(TreeNode::Leaf { value: 0.85 }),
-            }),
+            right: Box::new(TreeNode::Leaf { value: 0.85 }),
         };
 
-        // Tree 2: Level 0 Imbalance & Spread
+        // Tree 2: Level 0 Imbalance with neutral deadband [-0.15, 0.15]
         let tree2 = TreeNode::Split {
             feature_idx: 2, // imbalance_l0
-            threshold: 0.0,
+            threshold: 0.15,
             left: Box::new(TreeNode::Split {
-                feature_idx: 0, // spread_bps
-                threshold: 2.5,
-                left: Box::new(TreeNode::Leaf { value: -0.40 }),
-                right: Box::new(TreeNode::Leaf { value: -0.70 }),
+                feature_idx: 2,
+                threshold: -0.15,
+                left: Box::new(TreeNode::Leaf { value: -0.70 }),
+                right: Box::new(TreeNode::Leaf { value: 0.0 }),
             }),
-            right: Box::new(TreeNode::Split {
-                feature_idx: 0, // spread_bps
-                threshold: 2.5,
-                left: Box::new(TreeNode::Leaf { value: 0.40 }),
-                right: Box::new(TreeNode::Leaf { value: 0.70 }),
-            }),
+            right: Box::new(TreeNode::Leaf { value: 0.70 }),
         };
 
-        // Tree 3: Trade imbalance & Volatility
+        // Tree 3: Order Flow Imbalance (OFI) with neutral deadband [-10.0, 10.0]
         let tree3 = TreeNode::Split {
-            feature_idx: 7, // trade_imbalance
-            threshold: 0.0,
+            feature_idx: 4, // ofi
+            threshold: 10.0,
             left: Box::new(TreeNode::Split {
-                feature_idx: 6, // volatility
-                threshold: 0.05,
-                left: Box::new(TreeNode::Leaf { value: -0.20 }),
-                right: Box::new(TreeNode::Leaf { value: -0.50 }),
+                feature_idx: 4,
+                threshold: -10.0,
+                left: Box::new(TreeNode::Leaf { value: -0.60 }),
+                right: Box::new(TreeNode::Leaf { value: 0.0 }),
             }),
-            right: Box::new(TreeNode::Split {
-                feature_idx: 6, // volatility
-                threshold: 0.05,
-                left: Box::new(TreeNode::Leaf { value: 0.20 }),
-                right: Box::new(TreeNode::Leaf { value: 0.50 }),
-            }),
+            right: Box::new(TreeNode::Leaf { value: 0.60 }),
         };
 
         ensemble.add_tree(tree1);

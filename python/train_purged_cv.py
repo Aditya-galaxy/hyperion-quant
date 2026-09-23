@@ -111,22 +111,16 @@ def purged_group_cv(X, y, n_splits=5, embargo_pct=0.02):
     return mean_acc
 
 def train_and_eval_fold(X_train, y_train, X_test, y_test):
-    """Evaluates fold accuracy using production tree split architecture."""
+    """Evaluates fold accuracy using production tree split architecture with neutral deadbands."""
     def eval_node(x):
-        # Tree 1: Micro-price & OFI
-        t1 = -0.85 if (x[1] <= 0.0 and x[4] <= -15.0) else (
-             -0.25 if (x[1] <= 0.0) else (
-              0.25 if (x[4] <= 15.0) else 0.85))
+        # Tree 1: Micro-price bias with deadband [-0.20, 0.20] bps
+        t1 = 0.85 if x[1] > 0.20 else (-0.85 if x[1] <= -0.20 else 0.0)
         
-        # Tree 2: Level 0 Imbalance & Spread
-        t2 = -0.70 if (x[2] <= 0.0 and x[0] > 2.5) else (
-             -0.40 if (x[2] <= 0.0) else (
-              0.40 if (x[0] <= 2.5) else 0.70))
+        # Tree 2: Level 0 Imbalance with deadband [-0.15, 0.15]
+        t2 = 0.70 if x[2] > 0.15 else (-0.70 if x[2] <= -0.15 else 0.0)
         
-        # Tree 3: Trade Imbalance & Volatility
-        t3 = -0.50 if (x[7] <= 0.0 and x[6] > 0.05) else (
-             -0.20 if (x[7] <= 0.0) else (
-              0.20 if (x[6] <= 0.05) else 0.50))
+        # Tree 3: OFI with deadband [-10.0, 10.0]
+        t3 = 0.60 if x[4] > 10.0 else (-0.60 if x[4] <= -10.0 else 0.0)
         
         raw = t1 + t2 + t3
         return 1 if (1.0 / (1.0 + np.exp(-raw))) >= 0.5 else 0
@@ -139,57 +133,42 @@ def export_optimized_model_to_gcs_and_repo(out_json_path="python/lob_model_weigh
     trees = [
         {
             "feature_index": 1,
-            "threshold": 0.0,
+            "threshold": 0.20,
             "left": {
-                "feature_index": 4,
-                "threshold": -15.0,
+                "feature_index": 1,
+                "threshold": -0.20,
                 "left": {"value": -0.85},
-                "right": {"value": -0.25}
+                "right": {"value": 0.0}
             },
-            "right": {
-                "feature_index": 4,
-                "threshold": 15.0,
-                "left": {"value": 0.25},
-                "right": {"value": 0.85}
-            }
+            "right": {"value": 0.85}
         },
         {
             "feature_index": 2,
-            "threshold": 0.0,
+            "threshold": 0.15,
             "left": {
-                "feature_index": 0,
-                "threshold": 2.5,
-                "left": {"value": -0.40},
-                "right": {"value": -0.70}
+                "feature_index": 2,
+                "threshold": -0.15,
+                "left": {"value": -0.70},
+                "right": {"value": 0.0}
             },
-            "right": {
-                "feature_index": 0,
-                "threshold": 2.5,
-                "left": {"value": 0.40},
-                "right": {"value": 0.70}
-            }
+            "right": {"value": 0.70}
         },
         {
-            "feature_index": 7,
-            "threshold": 0.0,
+            "feature_index": 4,
+            "threshold": 10.0,
             "left": {
-                "feature_index": 6,
-                "threshold": 0.05,
-                "left": {"value": -0.20},
-                "right": {"value": -0.50}
+                "feature_index": 4,
+                "threshold": -10.0,
+                "left": {"value": -0.60},
+                "right": {"value": 0.0}
             },
-            "right": {
-                "feature_index": 6,
-                "threshold": 0.05,
-                "left": {"value": 0.20},
-                "right": {"value": 0.50}
-            }
+            "right": {"value": 0.60}
         }
     ]
 
     model_def = {
         "model_name": "HyperionLOBAdverseSelectionModel",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "validation_strategy": "PurgedGroupTimeSeriesCV_with_Embargo",
         "cv_folds": 5,
         "embargo_ratio": 0.02,
