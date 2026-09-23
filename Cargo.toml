@@ -1,0 +1,13 @@
+[package]
+name = "hyperion_hft"
+version = "0.1.0"
+edition = "2021"
+authors = ["Aditya"]
+description = "Ultra-low-latency, zero-allocation HFT & Market Making engine in Rust"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+overflow-checks = false
