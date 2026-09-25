@@ -106,13 +106,20 @@ def by_kind(outcomes: list[Outcome], horizons: tuple[int, ...] = HORIZONS,
 
 
 def score_lexicon(outcomes: list[Outcome], evaluate, horizon: int,
-                  threshold: float = 0.1) -> dict:
+                  threshold: float = 0.1, entry: int = 0) -> dict:
     """How the keyword engine's calls compare with what the price did.
 
     `evaluate(title) -> impact in [-1, 1]`. A call is made when |impact| is
     above `threshold`. Reported next to the base rate — the hit rate of simply
     calling every event "up" — because a hit rate means nothing without it.
+
+    `entry` scores the call against the move *after* that many seconds rather
+    than from the notice itself. Knowing the direction is worth little if the
+    move is over before anyone can act: with entry=10, a call is right only if
+    the price kept going its way from +10 s to `horizon`.
     """
+    if entry and not (0 < entry < horizon):
+        raise ValueError("entry must be between 0 and the horizon")
     rows = []
     for o in outcomes:
         if o.status != "ok":
@@ -120,15 +127,19 @@ def score_lexicon(outcomes: list[Outcome], evaluate, horizon: int,
         impact = evaluate(o.event.title)
         call = 0 if abs(impact) <= threshold else (1 if impact > 0 else -1)
         moved = o.abnormal[horizon]
+        if entry:
+            moved = (1 + moved) / (1 + o.abnormal[entry]) - 1
         rows.append((o.event.kind, call, 1 if moved > 0 else -1 if moved < 0 else 0))
 
     called = [r for r in rows if r[1] != 0]
     per_kind: dict[str, dict[str, int]] = {}
-    for kind, call, _ in rows:
-        counts = per_kind.setdefault(kind, {"up": 0, "down": 0, "none": 0})
+    for kind, call, moved in rows:
+        counts = per_kind.setdefault(kind, {"up": 0, "down": 0, "none": 0, "right": 0})
         counts["up" if call > 0 else "down" if call < 0 else "none"] += 1
+        counts["right"] += int(call != 0 and call == moved)
     return {
         "horizon_s": horizon,
+        "entry_s": entry,
         "events": len(rows),
         "calls": len(called),
         "coverage": len(called) / len(rows) if rows else float("nan"),

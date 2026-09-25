@@ -46,6 +46,9 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=30,
                         help="most recent N events (each costs ~1–6 MB of downloads the first time)")
     parser.add_argument("--horizon", type=int, default=60, help="seconds after the notice used to score the keyword engine")
+    parser.add_argument("--entry", type=int, default=0,
+                        help="score the keyword engine on the move after this many seconds "
+                             "(e.g. 10: could anyone acting on the call still profit?)")
     parser.add_argument("--refresh", action="store_true", help="re-fetch the Upbit notice list")
     parser.add_argument("--out", default=str(CACHE / "results.json"))
     args = parser.parse_args()
@@ -53,8 +56,12 @@ def main() -> int:
     since = datetime.fromisoformat(args.since).replace(tzinfo=timezone.utc)
     until = datetime.fromisoformat(args.until).replace(tzinfo=timezone.utc) if args.until else None
     kinds = tuple(k.strip() for k in args.kinds.split(",") if k.strip())
-    if args.horizon not in study.HORIZONS or args.horizon <= 0:
-        print(f"--horizon must be one of {[h for h in study.HORIZONS if h > 0]}")
+    positive = [h for h in study.HORIZONS if h > 0]
+    if args.horizon not in positive:
+        print(f"--horizon must be one of {positive}")
+        return 2
+    if args.entry and (args.entry not in positive or args.entry >= args.horizon):
+        print(f"--entry must be one of {positive} and earlier than --horizon")
         return 2
 
     notices = ev.fetch_upbit(CACHE / "upbit_trade.jsonl", since, refresh=args.refresh)
@@ -106,14 +113,17 @@ def main() -> int:
         engine = MultilingualNewsAlphaEngine()
         lexicon = study.score_lexicon(
             outcomes, lambda title: engine.evaluate_headline(title, "ko", "upbit").expected_impact,
-            args.horizon)
-        print(f"\n  Keyword engine vs the real move at +{args.horizon}s: "
+            args.horizon, entry=args.entry)
+        window = f"+{args.entry}s→+{args.horizon}s" if args.entry else f"+{args.horizon}s"
+        print(f"\n  Keyword engine vs the real move over {window}: "
               f"called {lexicon['calls']} of {lexicon['events']} events "
-              f"({lexicon['coverage'] * 100:.0f}% coverage), right on "
-              f"{lexicon['hit_rate'] * 100:.0f}% of its calls; "
-              f"'always up' would score {lexicon['base_rate_up'] * 100:.0f}%.")
+              f"({lexicon['coverage'] * 100:.0f}% coverage)"
+              + (f", right on {lexicon['hit_rate'] * 100:.0f}% of its calls" if lexicon["calls"] else "")
+              + f"; 'always up' would score {lexicon['base_rate_up'] * 100:.0f}%.")
         for kind, c in lexicon["calls_by_kind"].items():
-            print(f"    {kind:<17} up {c['up']:>3}   down {c['down']:>3}   no call {c['none']:>3}")
+            calls = c["up"] + c["down"]
+            right = f"right {c['right']:>3}/{calls:<3}" if calls else "right   —   "
+            print(f"    {kind:<17} up {c['up']:>3}   down {c['down']:>3}   no call {c['none']:>3}   {right}")
     except ImportError as exc:
         print(f"\n  (keyword engine not scored: {exc})")
 
