@@ -19,7 +19,7 @@ import os
 import sys
 
 def prepare_benchmark_sample(output_path="hf_publish/benchmark_data_sample.jsonl", n_samples=1000):
-    """Creates clean benchmark sample records from real-time and synthetic tick events."""
+    """Creates benchmark sample records. Every record is simulated with numpy (seed 42); none comes from a real market."""
     print(f"[*] Packaging benchmark sample ({n_samples:,} records) -> {output_path}...")
     import numpy as np
     np.random.seed(42)

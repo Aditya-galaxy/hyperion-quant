@@ -1,22 +1,16 @@
 ---
-language:
-- en
-- ko
-- zh
-- ja
-license: apache-2.0
+license: mit
 tags:
 - finance
-- quantitative-trading
-- high-frequency-trading
 - limit-order-book
 - adverse-selection
 - market-making
 - microstructure
 - order-flow-imbalance
-- time-series
+- synthetic
+- simulated-data
 size_categories:
-- 100K<n<1M
+- n<1K
 task_categories:
 - tabular-classification
 metrics:
@@ -24,102 +18,143 @@ metrics:
 - accuracy
 - f1
 - brier_score
-pretty_name: Hyperion High-Frequency LOB Adverse Selection Benchmark
+pretty_name: Hyperion-LOB — simulated adverse-selection benchmark
 ---
 
-# Hyperion-LOB: 150,000 High-Frequency Microstructure Benchmark & GBDT Adverse Selection Model
+# Hyperion-LOB: a simulated order-book benchmark and a hand-set adverse-selection rule
 
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Aditya--galaxy%2Fhyperion--quant-blue?logo=github)](https://github.com/Aditya-galaxy/hyperion-quant)
-[![Rust Engine](https://img.shields.io/badge/Rust_Inference-47.6_ns-success?logo=rust)](https://github.com/Aditya-galaxy/hyperion-quant)
-[![Financial ML](https://img.shields.io/badge/Validation-Purged_CV_with_Embargo-orange)](https://github.com/Aditya-galaxy/hyperion-quant)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Data](https://img.shields.io/badge/Data-simulated-lightgrey)](#read-this-first)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Aditya-galaxy/hyperion-quant/blob/main/LICENSE)
 
-## 📌 Executive Summary
+## Read this first
 
-**Hyperion-LOB** is an institutional-grade quantitative benchmark dataset and sub-microsecond machine learning model designed to detect **adverse selection risk** and **predatory institutional sweeps** in electronic Limit Order Books (LOB).
+- **Every record is simulated.** The data comes from
+  `generate_microstructure_data()` in
+  [`python/train_test_pipeline.py`](https://github.com/Aditya-galaxy/hyperion-quant/blob/main/python/train_test_pipeline.py)
+  (numpy, seed 42). No real market data was used to build, tune or evaluate
+  anything on this page.
+- **The label does not come from what the market did next.**
+  `is_adverse_selection` is 1 when a noisy weighted sum of the *same tick's*
+  features crosses a threshold. A model that scores well on it has recovered
+  that formula; it has not shown it can predict a market.
+- **The model is not trained.** It is three decision stumps with hand-set
+  thresholds. Cross-validation scores this fixed rule on each fold; the training
+  folds go unused.
+- **The metrics measure agreement with the simulator's label.** They say nothing
+  about real-market accuracy or profitability. There is no real-market
+  evaluation yet.
+- **Drop the `regime` column before using the sample.** It is the simulator's
+  hidden state and gives the label away. In `benchmark_data_sample.jsonl`,
+  every `toxic_sweep` row is labelled 1, and guessing the label from `regime`
+  alone scores 89.1% accuracy, higher than the rule on this page.
 
-In high-frequency market making, passive quoting algorithms suffer from the **"Winner's Curse"**: passive limit orders are preferentially filled right before the market moves against them (informed toxic order flow). **Hyperion-LOB** predicts directional price excursions and microstructure toxicity to dynamically widen quote spreads and skew reservation prices via an augmented **Avellaneda-Stoikov (2008)** framework.
-
----
-
-## 🔬 Dataset Architecture & Features
-
-The dataset comprises **150,000 chronological tick events** across three distinct market regimes (Calm Passive Liquidity, Trending Expansion, and Predatory Liquidity Sweeps).
-
-| Feature Index | Feature Name | Formula / Description | Domain |
-| :---: | :--- | :--- | :---: |
-| `0` | **`spread_bps`** | $\frac{P_{ask} - P_{bid}}{P_{mid}} \times 10,000$ (Bid-Ask Spread in bps) | $[0.1, 50.0]$ |
-| `1` | **`micro_price_bias_bps`** | $\frac{P_{micro} - P_{mid}}{P_{mid}} \times 10,000$ (Micro-Price deviation) | $[-25.0, 25.0]$ |
-| `2` | **`imbalance_l0`** | $\frac{Q_{bid}^0 - Q_{ask}^0}{Q_{bid}^0 + Q_{ask}^0}$ (Best-level queue depth imbalance) | $[-1.0, 1.0]$ |
-| `3` | **`imbalance_l1`** | $\frac{Q_{bid}^1 - Q_{ask}^1}{Q_{bid}^1 + Q_{ask}^1}$ (Level 1 queue depth imbalance) | $[-1.0, 1.0]$ |
-| `4` | **`ofi`** | Continuous Order Flow Imbalance (accumulated depth delta) | $(-\infty, \infty)$ |
-| `5` | **`returns`** | Short-horizon instantaneous log return | $(-\infty, \infty)$ |
-| `6` | **`volatility`** | Instantaneous realized volatility proxy | $[0.0, 1.0]$ |
-| `7` | **`trade_imbalance`** | Signed aggressive taker trade volume over rolling window | $(-\infty, \infty)$ |
-
----
-
-## 🛡️ Financial ML Methodology (López de Prado Standard)
-
-Standard random train/test splits fail catastrophically in finance due to lookahead bias and serial correlation. Hyperion-LOB is evaluated strictly under **Marcos López de Prado's Financial Machine Learning Protocol**:
-
-1. **Chronological Walk-Forward Split:**
-   * **In-Sample Train:** 70% (105,000 ticks)
-   * **Post-Train Embargo Buffer:** 3,000 ticks purged
-   * **Validation Set:** 15% (22,500 ticks)
-   * **Post-Val Embargo Buffer:** 3,000 ticks purged
-   * **Out-of-Sample (OOS) Holdout:** 15% (22,500 ticks) — *Completely untouched*
-2. **5-Fold Purged Cross-Validation with Embargo:** Enforces buffer zones between cross-validation folds to eliminate autoregressive memory leakage.
-3. **Triple-Barrier Ground Truth Labeling:** Labels true institutional sweeps based on volatility-adjusted forward price excursions.
+What this *is* useful for: exercising the inference path, measuring latency,
+and a reproducible baseline for the evaluation code. A real benchmark needs
+recorded order books, with labels taken from how prices moved *after* each tick.
 
 ---
 
-## 📊 Benchmark Evaluation Metrics
+## The problem it is aimed at
 
-Evaluated on the **19,500 completely untouched out-of-sample holdout ticks**:
+A passive market maker is filled preferentially just before the price moves
+against it — adverse selection, or the "winner's curse" of quoting. The rule
+here flags ticks whose order-book state looks like informed, one-sided flow, so
+an Avellaneda–Stoikov (2008) quoting engine can widen and skew its quotes.
 
-| Metric | Score | Financial Interpretation |
-| :--- | :---: | :--- |
-| **Adverse Selection ROC-AUC** | **0.8534** | Strong separation between informed sweeps and absorbed liquidity |
-| **Classification Accuracy** | **85.03%** | Reliable overall regime classification |
-| **Sweep Recall (Defense Rate)**| **76.40%** | Catches $> \frac{3}{4}$ of all predatory sweeps before fills occur |
-| **Specificity (Calm Quoting)**| **87.45%** | Retains tight spreads to capture maximum passive bid-ask spread |
-| **Precision (Toxicity)** | **62.99%** | Low false alarm rate |
-| **Brier Score Calibration** | **0.1024** | Probabilities are well-calibrated, avoiding wild overconfidence |
+## The simulated data
 
-### Microstructure Confusion Matrix:
-* **True Positives (Sweeps Defended):** 3,256 ticks (16.7%)
-* **True Negatives (Passive Spread Captured):** 13,325 ticks (68.3%)
-* **False Positives (False Alarms):** 1,913 ticks (9.8%)
-* **False Negatives (Uncaught Sweeps):** 1,006 ticks (5.2%)
+150,000 ticks. A regime follows a Markov chain (calm, trending, toxic sweep).
+Given the regime, each tick's features are drawn from simple distributions: they
+are **sampled, not computed from order books**. The only serial dependence is
+regime persistence.
 
----
+| Index | Feature | Intended meaning |
+| :---: | :--- | :--- |
+| `0` | `spread_bps` | Bid-ask spread in basis points |
+| `1` | `micro_price_bias_bps` | Micro-price minus mid, in bps |
+| `2` | `imbalance_l0` | Best-level depth imbalance, [-1, 1] |
+| `3` | `imbalance_l1` | Level-1 depth imbalance, [-1, 1] |
+| `4` | `ofi` | Order-flow imbalance |
+| `5` | `returns` | Short-horizon return |
+| `6` | `volatility` | Realized-volatility proxy |
+| `7` | `trade_imbalance` | Signed aggressive trade volume |
 
-## ⚡ Sub-Microsecond Rust Production Inference
+The label, exactly as generated:
 
-The decision tree ensemble is compiled to **pure, zero-allocation Rust** with SIMD vectorization.
-
-```
-Benchmarking Pure Rust ML Forward-Pass Latency (1,000,000 evaluations):
-  Total Time:                   46.54 ms
-  Average ML Forward Pass:      46.54 nanoseconds
-  ML Inference Throughput:      21.49 Million evaluations/second
+```python
+latent_toxicity = (0.35 * abs(micro_price_bias) + 0.025 * abs(ofi)
+                   + 0.40 * abs(imbalance_l0) + 0.15 * abs(trade_imbalance)
+                   + normal(0, 0.20))
+is_adverse_selection = latent_toxicity > 0.85
 ```
 
-When evaluated in the live Binance WebSocket feed:
-* **Normal Balanced Book:** Alert: `[PASSIVE QUOTE SAFE]`, Spread Multiplier: `1.00x`, Directional Skew: `0.000`
-* **Predatory Sweep:** Alert: `[TOXIC SWEEP ACTIVE]`, Spread Multiplier: `2.32x`, Directional Skew: `±2.150`
+This repository ships `benchmark_data_sample.jsonl`: 1,000 records from a
+related generator in `python/publish_to_huggingface.py`. The full 150,000
+regenerate deterministically from the code above.
+
+## Evaluation protocol
+
+A chronological split with embargo gaps: train 105,000 ticks → 3,000 embargo →
+validation 19,500 → 3,000 embargo → **out-of-sample 19,500**. There is also a
+5-fold purged cross-validation on the training block (2% embargo). Both techniques
+come from López de Prado (2018). Here they guard against regime persistence
+leaking across the split. Because the rule is not fitted, the split mostly changes
+which simulated ticks each score is computed on.
+
+## Results: agreement with the simulator's label
+
+Out-of-sample, 19,500 ticks. Re-run with `python3 python/train_test_pipeline.py`;
+these figures reproduce exactly.
+
+| Metric | Score |
+| :--- | :---: |
+| ROC-AUC | 0.8534 |
+| Accuracy | 85.03% |
+| Recall (toxic ticks flagged) | 76.40% |
+| Specificity (calm ticks left alone) | 87.45% |
+| Precision | 62.99% |
+| Brier score | 0.1024 |
+| 5-fold CV accuracy | 85.85% ± 0.58% |
+
+Confusion matrix: 3,256 true positives, 13,325 true negatives, 1,913 false
+positives, 1,006 false negatives.
+
+## Latency (measured on real hardware)
+
+The same rule, compiled into the Rust engine
+(`DecisionTreeEnsemble::default_production_model()`), over 1,000,000 evaluations:
+
+```
+cargo run --release --bin run_ml_alpha      # Apple M1, rustc 1.89.0
+
+  Total Time:                   40.94 ms for 1,000,000 iterations
+  Average ML Forward Pass:      40.94 nanoseconds
+  ML Inference Throughput:      24.43 Million evals/sec
+```
+
+A previous run recorded 46.54 ns. Expect variation between runs and machines.
+
+The same binary then runs three **hard-coded order-book snapshots** through the
+quoting engine. These are illustrative outputs, not measurements from a live
+feed:
+
+| Snapshot | Flag | Spread multiplier | Skew |
+| :--- | :--- | :---: | :---: |
+| Balanced book (10 × 10) | normal | 1.00× | 0.000 |
+| Bid sweep (85 × 2) | toxic | 2.32× | +2.150 |
+| Ask wall (1.5 × 120) | toxic | 2.32× | −2.150 |
 
 ---
 
-## 💻 Quickstart: How to Use
+## Quickstart
 
-### Python Evaluation:
+### Python
+
 ```python
 import json
 import numpy as np
 
-# Load model weights
 with open("lob_model_weights.json", "r") as f:
     model = json.load(f)
 
@@ -135,18 +170,15 @@ def predict(features):
     toxicity = abs(prob - 0.5) * 2.0
     return raw, prob, toxicity
 
-# Example: Balanced calm market tick
 calm_tick = [0.8, 0.02, 0.04, 0.0, 1.2, 0.0001, 0.005, 0.2]
-raw, prob, tox = predict(calm_tick)
-print(f"Calm Tick Toxicity: {tox*100:.1f}% -> Spread Multiplier: 1.00x (PASSIVE QUOTE SAFE)")
-
-# Example: Predatory buy sweep
 sweep_tick = [1.2, 2.8, 0.90, 0.75, 65.0, 0.0004, 0.03, 8.5]
-raw, prob, tox = predict(sweep_tick)
-print(f"Sweep Toxicity: {tox*100:.1f}% -> Spread Multiplier: 2.32x (DEFENSE ACTIVE)")
+for name, tick in [("calm", calm_tick), ("sweep", sweep_tick)]:
+    _, _, tox = predict(tick)
+    print(f"{name}: toxicity {tox * 100:.1f}%")
 ```
 
-### Rust Engine Usage:
+### Rust
+
 ```rust
 use hyperion_quant::quant::ml_model::{DecisionTreeEnsemble, MicrostructureFeatures, MlAlphaEngine};
 
@@ -154,12 +186,11 @@ let model = DecisionTreeEnsemble::default_production_model();
 let engine = MlAlphaEngine::new(model, 0.35);
 
 let (spread_mult, directional_skew, is_toxic) = engine.evaluate(&features);
-// Latency: < 50 nanoseconds
 ```
 
 ---
 
-## 📚 Citations & Academic References
+## References
 
 ```bibtex
 @book{lopez2018advances,
