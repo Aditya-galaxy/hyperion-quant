@@ -43,3 +43,24 @@ jobs:
 
     - name: Verify Release Build
       run: cargo build --release --verbose
+
+  python_tests:
+    name: Python Tests (event study)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install test dependencies
+      run: pip install numpy pytest
+
+    # Offline by design: notice parsing runs on saved real notices, price
+    # arithmetic on hand-built series. No test reaches Upbit or Binance.
+    - name: Run Python tests
+      run: pytest python/tests -q
