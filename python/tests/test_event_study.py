@@ -247,3 +247,64 @@ def test_by_kind_groups_only_measured_events():
     table = study.by_kind(outcomes)
     assert list(table) == ["listing"]
     assert table["listing"][60].n == 1
+
+
+# ── the notice cache ─────────────────────────────────────────────────────────
+
+class _Response:
+    def __init__(self, body: dict):
+        self._raw = json.dumps(body).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self) -> bytes:
+        return self._raw
+
+
+def _page(notices: list[dict], total_pages: int) -> _Response:
+    return _Response({"success": True, "data": {"notices": notices, "total_pages": total_pages}})
+
+
+def _write_cache(path: Path, notices: list[dict]) -> None:
+    path.write_text("".join(json.dumps(n, ensure_ascii=False) + "\n" for n in notices), encoding="utf-8")
+
+
+RECENT = [n for n in NOTICES if n["first_listed_at"] >= "2026-08-01"]
+
+
+def test_cache_that_covers_since_is_reused_without_asking(tmp_path, monkeypatch):
+    cache = tmp_path / "upbit.jsonl"
+    _write_cache(cache, RECENT)
+    def refuse(*a, **k):
+        raise AssertionError("should not have asked Upbit")
+    monkeypatch.setattr(ev.urllib.request, "urlopen", refuse)
+    got = ev.fetch_upbit(cache, datetime(2026, 8, 10, tzinfo=timezone.utc))
+    assert len(got) == len(RECENT)
+
+
+def test_cache_that_stops_short_of_since_is_refetched(tmp_path, monkeypatch):
+    """The bug this guards: a cache built for a recent --since was reused for
+    an older one, and the study quietly covered a fraction of the period."""
+    cache = tmp_path / "upbit.jsonl"
+    _write_cache(cache, RECENT)                    # reaches back only to August 2026
+    older = [n for n in NOTICES if n["first_listed_at"] < "2023-07-01"]
+    pages = iter([_page(RECENT, 2), _page(older, 2)])
+    monkeypatch.setattr(ev.urllib.request, "urlopen", lambda *a, **k: next(pages))
+    monkeypatch.setattr(ev.time, "sleep", lambda s: None)
+    got = ev.fetch_upbit(cache, datetime(2023, 1, 1, tzinfo=timezone.utc))
+    assert len(got) == len(RECENT) + len(older)
+    assert json.loads((tmp_path / "upbit.jsonl.meta.json").read_text()) == {"complete": True}
+
+
+def test_complete_history_is_reused_for_any_since(tmp_path, monkeypatch):
+    cache = tmp_path / "upbit.jsonl"
+    _write_cache(cache, RECENT)
+    (tmp_path / "upbit.jsonl.meta.json").write_text(json.dumps({"complete": True}))
+    def refuse(*a, **k):
+        raise AssertionError("should not have asked Upbit")
+    monkeypatch.setattr(ev.urllib.request, "urlopen", refuse)
+    assert ev.fetch_upbit(cache, datetime(2010, 1, 1, tzinfo=timezone.utc))

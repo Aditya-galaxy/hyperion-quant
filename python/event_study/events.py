@@ -98,22 +98,45 @@ def from_notice(notice: dict) -> list[Event]:
     """One event per ticker named in the notice. A notice with no ticker
     ("ETH 및 ERC 계열 디지털 자산 투자 유의 촉구") produces none."""
     kind = classify(notice["title"])
-    at = parse_time(notice.get("first_listed_at") or notice["listed_at"])
+    at = notice_time(notice)
     return [Event(at=at, symbol=sym, kind=kind, title=notice["title"], language="ko",
                   source="upbit", source_id=str(notice["id"]))
             for sym in symbols(notice["title"])]
 
 
+def notice_time(notice: dict) -> datetime:
+    return parse_time(notice.get("first_listed_at") or notice["listed_at"])
+
+
+def _meta_path(cache: Path) -> Path:
+    return cache.with_name(cache.name + ".meta.json")
+
+
+def _cache_covers(notices: list[dict], since: datetime, complete: bool) -> bool:
+    """A cache can answer for `since` only if it reaches back past it, or holds
+    Upbit's whole history. A cache fetched for a later `since` would otherwise
+    be reused for an earlier one and quietly study a fraction of the period."""
+    if complete:
+        return True
+    return bool(notices) and min(notice_time(n) for n in notices) < since
+
+
 def fetch_upbit(cache: Path, since: datetime, refresh: bool = False) -> list[dict]:
     """Every trade notice back to `since`, cached as JSON lines.
 
-    With a cache and no `refresh`, nothing is requested. Otherwise pages are
-    fetched newest first until one is entirely older than `since`.
+    The cache is reused only when it covers `since`; otherwise, or with
+    `refresh`, pages are fetched newest first until one is entirely older than
+    `since` or the history runs out.
     """
     if cache.exists() and not refresh:
-        return [json.loads(line) for line in cache.read_text(encoding="utf-8").splitlines() if line]
+        cached = [json.loads(line) for line in cache.read_text(encoding="utf-8").splitlines() if line]
+        meta = _meta_path(cache)
+        complete = meta.exists() and json.loads(meta.read_text()).get("complete", False)
+        if _cache_covers(cached, since, complete):
+            return cached
 
     notices: list[dict] = []
+    complete = False
     page = 1
     while True:
         request = urllib.request.Request(UPBIT_NOTICES.format(page=page, per_page=PER_PAGE),
@@ -124,11 +147,13 @@ def fetch_upbit(cache: Path, since: datetime, refresh: bool = False) -> list[dic
             raise RuntimeError(f"Upbit refused page {page}: {body.get('error_message')}")
         batch = body["data"]["notices"]
         if not batch:
+            complete = True
             break
         notices.extend(batch)
-        if all(parse_time(n.get("first_listed_at") or n["listed_at"]) < since for n in batch):
+        if all(notice_time(n) < since for n in batch):
             break
         if page >= body["data"]["total_pages"]:
+            complete = True
             break
         page += 1
         time.sleep(REQUEST_GAP_SECONDS)
@@ -136,6 +161,7 @@ def fetch_upbit(cache: Path, since: datetime, refresh: bool = False) -> list[dic
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text("".join(json.dumps(n, ensure_ascii=False) + "\n" for n in notices),
                      encoding="utf-8")
+    _meta_path(cache).write_text(json.dumps({"complete": complete}))
     return notices
 
 
