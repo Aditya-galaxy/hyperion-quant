@@ -55,8 +55,8 @@ def generate_microstructure_dataset(n_samples=100_000):
         ofi, returns, volatility, trade_imbalance
     ])
 
-    # SOTA Target: Triple Barrier adverse selection ground-truth
-    # True institutional sweeps occur when micro-price skew, high OFI, and trade flow align
+    # Simulated label: a noisy threshold on the same tick's features. It is
+    # not a triple-barrier label and does not look at future prices.
     directional_drive = (
         0.30 * micro_price_bias +
         0.02 * ofi +
@@ -111,7 +111,12 @@ def purged_group_cv(X, y, n_splits=5, embargo_pct=0.02):
     return mean_acc
 
 def train_and_eval_fold(X_train, y_train, X_test, y_test):
-    """Evaluates fold accuracy using production tree split architecture with neutral deadbands."""
+    """Scores the fixed, hand-set production rule on one test fold.
+
+    X_train and y_train are deliberately unused: nothing is fitted. Each fold
+    measures the same rule against the simulator's label, so the spread across
+    folds is sampling noise, not evidence the rule generalises.
+    """
     def eval_node(x):
         # Tree 1: Micro-price bias with deadband [-0.20, 0.20] bps
         t1 = 0.85 if x[1] > 0.20 else (-0.85 if x[1] <= -0.20 else 0.0)

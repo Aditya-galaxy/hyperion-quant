@@ -5,6 +5,9 @@
   "validation_strategy": "PurgedGroupTimeSeriesCV_with_Embargo",
   "cv_folds": 5,
   "embargo_ratio": 0.02,
+  "model_type": "hand-set rule: three decision stumps; not fitted to data",
+  "evaluation_data": "simulated by generate_microstructure_data(seed=42); no real market data",
+  "metrics_meaning": "agreement with the simulator's own label, not real-market performance",
   "performance_audit": {
     "oos_accuracy_pct": 85.03,
     "oos_auc": 0.8534,

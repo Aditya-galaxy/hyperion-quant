@@ -74,9 +74,10 @@ def generate_microstructure_data(n_samples=150_000, seed=42):
         ofi, returns, volatility, trade_imbalance
     ])
 
-    # Ground-truth Triple-Barrier Adverse Selection Label:
-    # 1 = Toxic Sweep Alert (adverse selection risk requiring defense)
-    # 0 = Normal / Absorbed Liquidity (passive quote safe)
+    # Simulated label. This is NOT a triple-barrier label: nothing here looks
+    # at future prices. It is a noisy threshold on the same tick's features,
+    # so a model scores well by recovering this formula, not by predicting a
+    # market. 1 = "toxic sweep", 0 = "normal / absorbed liquidity".
     latent_toxicity = (
         0.35 * np.abs(micro_price_bias) +
         0.025 * np.abs(ofi) +
@@ -215,7 +216,7 @@ def run_pipeline():
     print(f"[+] Purged Cross-Validation Score: \x1b[1;32m{mean_cv_acc*100:.2f}%\x1b[0m (± {std_cv_acc*100:.2f}%)\n")
 
     # Step 4: Out-of-Sample Holdout Testing
-    print("\x1b[1;33m[*] Evaluating on Out-Of-Sample (OOS) Holdout Test Set (22,500 ticks)...\x1b[0m")
+    print(f"\x1b[1;33m[*] Evaluating on Out-Of-Sample (OOS) Holdout Test Set ({len(X_test):,} ticks)...\x1b[0m")
     test_evals = [predict_single(row) for row in X_test]
     test_preds = np.array([e[3] for e in test_evals])
     test_probs = np.array([e[2] for e in test_evals])
@@ -252,6 +253,11 @@ def run_pipeline():
         "validation_strategy": "PurgedGroupTimeSeriesCV_with_Embargo",
         "cv_folds": 5,
         "embargo_ratio": 0.02,
+        # What the metrics below are, stated where the numbers live, so they
+        # cannot be copied anywhere without it.
+        "model_type": "hand-set rule: three decision stumps; not fitted to data",
+        "evaluation_data": "simulated by generate_microstructure_data(seed=42); no real market data",
+        "metrics_meaning": "agreement with the simulator's own label, not real-market performance",
         "performance_audit": {
             "oos_accuracy_pct": round(metrics["accuracy"] * 100.0, 2),
             "oos_auc": round(metrics["auc"], 4),
