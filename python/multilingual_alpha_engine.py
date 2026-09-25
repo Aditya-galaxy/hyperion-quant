@@ -17,6 +17,7 @@ Includes dataset generation specification formatted for Adaption Labs
 
 import json
 import math
+import re
 import time
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
@@ -38,36 +39,69 @@ class MultilingualNewsAlphaEngine:
         
         # High-impact linguistic keywords across regional crypto markets
         self.bullish_lexicon = {
-            "ko": ["상장", "입금 개시", "파트너십", "투자 유치", "거래 지원", "승인", "신규 상장"],
+            # Upbit's own notice wording: "신규 거래지원" (new trading support),
+            # "디지털 자산 추가" (asset added), and a caution designation lifted.
+            "ko": ["상장", "입금 개시", "파트너십", "투자 유치", "거래 지원", "승인", "신규 상장",
+                   "신규 거래지원", "디지털 자산 추가", "유의 종목 지정 해제"],
             "zh": ["上线", "通过", "批准", "战略合作", "融资", "利好", "支持交易", "持仓增加"],
             "ja": ["上場", "承認", "提携", "資金調達", "認可", "取扱開始", "買い増し"],
             "en": ["listed", "approved", "sec approval", "etf net inflow", "acquisition", "strategic partnership", "mainnet launch"]
         }
         
         self.bearish_lexicon = {
-            "ko": ["유의종목", "상장폐지", "출금 중단", "해킹", "규제", "압수수색", "기소"],
+            # Upbit: "거래지원 종료" (trading support ends — a delisting),
+            # "유의 종목 지정" (designated a caution item), "유의 촉구" (warning).
+            "ko": ["유의종목", "상장폐지", "출금 중단", "해킹", "규제", "압수수색", "기소",
+                   "거래지원 종료", "유의 종목 지정", "유의 촉구"],
             "zh": ["下架", "清退", "暂停提现", "黑客攻击", "立案调查", "制裁", "爆仓", "禁止"],
-            "ja": ["廃止", "停止", "ハッキング", "捜査", "制裁", "警告", "不正流出"],
+            "ja": ["廃止", "停止", "ハッキング", "捜査", "制裁", "警告", "不正流出", "上場廃止"],
             "en": ["delisted", "sec lawsuit", "investigation", "enforcement action", "exploit", "hack", "insolvency", "outflows", "ban"]
         }
 
+    @staticmethod
+    def _normalise(text: str, language: str) -> str:
+        # Korean spacing is inconsistent — Upbit writes "거래지원" where a
+        # dictionary writes "거래 지원" — so Korean is matched without spaces.
+        if language == "ko":
+            return re.sub(r"\s+", "", text)
+        return text.lower()
+
+    def match_terms(self, headline: str, language: str) -> List[Tuple[str, int]]:
+        """Lexicon terms found in a headline, as (term, +1 bullish / -1 bearish).
+
+        Longest phrase first, and a matched phrase uses up its text. Without
+        that, every phrase that contains a shorter one of the opposite sign
+        cancels itself out: "상장폐지" (delisting) also contains "상장"
+        (listing), "delisted" contains "listed", "上場廃止" contains "上場" —
+        and each scored +0.45 - 0.50, too weak to make any call at all.
+
+        English terms must also stand as whole words, or "ban" fires on
+        "bank" and "hack" on "hackathon". Korean, Chinese and Japanese don't
+        mark word boundaries with spaces, so they rely on longest-match alone.
+        """
+        work = self._normalise(headline, language)
+        candidates = [(t, 1) for t in self.bullish_lexicon.get(language, [])] + \
+                     [(t, -1) for t in self.bearish_lexicon.get(language, [])]
+        candidates.sort(key=lambda c: -len(self._normalise(c[0], language)))
+        found: List[Tuple[str, int]] = []
+        for term, sign in candidates:
+            needle = re.escape(self._normalise(term, language))
+            pattern = re.compile(rf"(?<![a-z0-9]){needle}(?![a-z0-9])" if language == "en" else needle)
+            if pattern.search(work):
+                found.append((term, sign))
+                work = pattern.sub(lambda m: "\x00" * len(m.group(0)), work)
+        return found
+
     def evaluate_headline(self, headline: str, language: str, source: str = "LiveWire") -> NewsHeadlineEvent:
         """Parses headline and produces structured NewsHeadlineEvent."""
-        hl_lower = headline.lower()
         score = 0.0
         confidence = 0.5
-        
-        # Match regional lexicons
-        bull_words = self.bullish_lexicon.get(language, [])
-        bear_words = self.bearish_lexicon.get(language, [])
-        
-        for w in bull_words:
-            if w in hl_lower or w in headline:
+
+        for _term, sign in self.match_terms(headline, language):
+            if sign > 0:
                 score += 0.45
                 confidence = min(0.95, confidence + 0.20)
-
-        for w in bear_words:
-            if w in hl_lower or w in headline:
+            else:
                 score -= 0.50
                 confidence = min(0.95, confidence + 0.25)
 

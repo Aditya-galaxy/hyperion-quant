@@ -238,7 +238,8 @@ def test_score_lexicon_reports_hit_rate_next_to_base_rate():
     assert got["coverage"] == pytest.approx(0.75)
     assert got["hit_rate"] == pytest.approx(2 / 3)
     assert got["base_rate_up"] == pytest.approx(0.5)
-    assert got["calls_by_kind"]["caution_on"] == {"up": 0, "down": 0, "none": 1}
+    assert got["calls_by_kind"]["caution_on"] == {"up": 0, "down": 0, "none": 1, "right": 0}
+    assert got["calls_by_kind"]["listing"] == {"up": 2, "down": 0, "none": 0, "right": 1}
 
 
 def test_by_kind_groups_only_measured_events():
@@ -308,3 +309,17 @@ def test_complete_history_is_reused_for_any_since(tmp_path, monkeypatch):
         raise AssertionError("should not have asked Upbit")
     monkeypatch.setattr(ev.urllib.request, "urlopen", refuse)
     assert ev.fetch_upbit(cache, datetime(2010, 1, 1, tzinfo=timezone.utc))
+
+
+def test_score_lexicon_from_an_entry_point():
+    """Right from the notice isn't the same as right for someone acting at +10 s."""
+    early = study.Outcome(event("listing", "bull"), "XUSDT", "ok", {10: 0.20, 60: 0.18})
+    got = study.score_lexicon([early], {"bull": 0.45}.__getitem__, horizon=60)
+    assert got["hit_rate"] == 1.0                 # up from the notice: +18%
+    got = study.score_lexicon([early], {"bull": 0.45}.__getitem__, horizon=60, entry=10)
+    assert got["hit_rate"] == 0.0                 # but down from +10 s: 1.18/1.20 - 1 < 0
+
+
+def test_entry_must_come_before_the_horizon():
+    with pytest.raises(ValueError):
+        study.score_lexicon([], lambda t: 0.0, horizon=60, entry=60)
