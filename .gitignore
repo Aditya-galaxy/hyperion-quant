@@ -34,3 +34,6 @@ ENV/
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# Event-study downloads (Binance archive, Upbit notices): rebuilt on demand
+data/event_study/
