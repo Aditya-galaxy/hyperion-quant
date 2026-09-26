@@ -1,12 +1,13 @@
 """
-Institutional Quantitative Training Engine:
-Implements Marcos López de Prado's SOTA Financial ML Standards:
-1. Purged Group Time-Series Cross Validation (avoids train-test overlap leakage)
-2. Post-Test Embargo Period (eliminates autoregressive memory leakage)
-3. Triple-Barrier Target Labeling with Volatility-Adjusted Horizons
-4. Bayesian Hyperparameter Optimization with Optuna / Tree-structured Parzen Estimator (TPE)
-5. Out-of-Fold AUC & Information Ratio calculation
-6. Automated Tree Export and GCS Cloud Bucket Synchronization
+Purged cross-validation of the hand-set adverse-selection rule.
+1. Simulates 100,000 ticks across three regimes (calm, trending, toxic).
+2. Splits them with purged, embargoed time-series folds (López de Prado), so
+   no test tick's neighbours leak into training.
+3. Scores the three hand-set decision stumps on each fold. The training folds
+   go unused: there is nothing to fit.
+4. Writes the trees to python/lob_model_weights.json. Nothing is uploaded.
+This is what the paused Cloud Run job `hyperion-model-retrainer` runs. The
+scores measure agreement with the simulator, not market accuracy.
 """
 
 import json
@@ -16,7 +17,7 @@ import numpy as np
 
 def generate_microstructure_dataset(n_samples=100_000):
     """
-    Simulates institutional tick book environment with realistic market dynamics.
+    Simulates an order book tick stream with regime-dependent dynamics.
     Features:
     [0]: Spread (bps)
     [1]: Micro-Price Bias (bps)

@@ -8,7 +8,7 @@ Connects directly to Binance live exchange WebSocket streams:
 Integrates:
   - Feature A: Multilingual News Alpha Engine (Korean, Chinese, Japanese, English news skew)
   - Feature B: Black-Swan Liquidity & Flash Crash Defense (circuit breakers & depth collapse defense)
-  - Sub-microsecond GBDT Microstructure ML Model (46 ns forward pass)
+  - Adverse-selection rule: three hand-set decision stumps over order-book features
   - Dynamic Avellaneda-Stoikov reservation price and defended quote spread calculation
 
 Simultaneously records clean real-time tick datasets to disk for continuous learning.

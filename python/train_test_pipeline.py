@@ -1,6 +1,6 @@
 """
-HYPERION QUANT: INSTITUTIONAL TRAIN/TEST PIPELINE
-==================================================
+HYPERION QUANT: TRAIN/TEST PIPELINE ON SIMULATED TICKS
+======================================================
 Implements Marcos López de Prado's Financial Machine Learning Protocol:
 1. Multi-Regime Microstructure Tick Simulation (150,000 events)
 2. Purged Chronological Time-Series Split with Embargo Buffers:
@@ -24,7 +24,7 @@ import numpy as np
 
 def generate_microstructure_data(n_samples=150_000, seed=42):
     """
-    Simulates high-resolution institutional tick events across 3 realistic market regimes:
+    Simulates tick events across 3 market regimes:
       Regime 0 (70%): Calm Passive Liquidity (Tight spreads, low volatility, balanced OFI)
       Regime 1 (20%): Trending Information Drift (Spread widening, directional flow)
       Regime 2 (10%): Predatory Aggressive Sweeps (Ask walls, massive sweeps, flash liquidity drain)
@@ -158,7 +158,7 @@ def evaluate_metrics(y_true, y_pred, prob_toxicity):
 
 def run_pipeline():
     print("=" * 80)
-    print("  HYPERION QUANT: INSTITUTIONAL PURGED TIME-SERIES TRAIN/TEST PIPELINE")
+    print("  HYPERION QUANT: PURGED TIME-SERIES TRAIN/TEST PIPELINE (SIMULATED DATA)")
     print("=" * 80)
 
     # Step 1: Generate Data

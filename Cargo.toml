@@ -3,7 +3,7 @@ name = "hyperion-quant"
 version = "0.1.0"
 edition = "2021"
 authors = ["Aditya"]
-description = "High-performance Quantitative Trading & Statistical Arbitrage Platform in modern Rust"
+description = "Low-latency trading engine components in Rust (order book, matching, risk, backtester) for research; not connected to any exchange"
 
 [profile.release]
 opt-level = 3
