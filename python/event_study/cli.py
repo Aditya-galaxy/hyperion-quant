@@ -5,6 +5,8 @@ HYPERION EVENTS: COMMAND LINE
     hyperion-events ingest --seed data/event_study/upbit_trade.jsonl
     hyperion-events report --kinds listing    # price reaction + how fast you'd have to be
     hyperion-events export --format csv > events.csv
+    hyperion-events keys create alice@fund.com --plan pro
+    hyperion-events serve --port 8000         # the HTTP API (pip install "./python[api]")
 
 Everything lives in one SQLite file (--db, default data/hyperion.db) and the
 Binance price cache (--prices). Read only against the exchanges: no keys,
@@ -21,10 +23,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import numpy as np
-
 from . import events as ev
-from . import pipeline, store, study, tradability
+from . import pipeline, store, study, summary, tradability
 
 DATA = Path("data")
 
@@ -58,36 +58,29 @@ def cmd_report(args, conn) -> int:
     print(f"\n  {len(data)} events, {len(ok)} measured "
           f"({sum(r['status'] == 'pending' for r in data)} pending, "
           f"{sum(r['status'] in ('no_pair', 'no_price') for r in data)} not on Binance).")
-    rng = np.random.default_rng(7)
     for kind in kinds:
-        mine = [r for r in ok if r["kind"] == kind]
-        if not mine:
+        s = summary.kind_summary(data, kind, args.fill, args.hold)
+        if not s["n"]:
             continue
-        print(f"\n  {kind}  (n = {len(mine)})")
+        print(f"\n  {kind}  (n = {s['n']})")
         print("    abnormal return vs BTC   " + "".join(f"{h:>+8d}s" for h in study.HORIZONS))
-        stats = [study.summarise([r["abnormal"][str(h)] for r in mine], rng) for h in study.HORIZONS]
-        print("      median                 " + "".join(f"{_pct(s.median):>9}" for s in stats))
-        print("      mean                   " + "".join(f"{_pct(s.mean):>9}" for s in stats))
+        for stat in ("median", "mean"):
+            print(f"      {stat:<23}" + "".join(f"{_pct(s['abnormal'][str(h)][stat]):>9}" for h in study.HORIZONS))
 
-        grids = [r["tradability"] for r in mine if r["tradability"]]
-        if not grids:
+        t = s["tradability"]
+        if not t["n"]:
             continue
-        side = "long" if tradability.DIRECTION.get(kind, 1) > 0 else "short"
-        table = tradability.summarise(grids, args.fill)
-        print(f"    {side} trade, {args.fill} fill, net of fees — median (win rate) by fill delay and hold")
+        print(f"    {s['side']} trade, {args.fill} fill, net of fees — median (win rate) by fill delay and hold")
         print("      filled at   " + "".join(f"{'hold +' + str(h) + 's':>18}" for h in tradability.HOLDS))
-        for lat, row in table.items():
-            cells = "".join(f"{_pct(row[h].median) + f' ({row[h].win * 100:3.0f}%)':>18}" if h in row else f"{'':>18}"
-                            for h in tradability.HOLDS)
+        for lat, row in t["table"].items():
+            cells = "".join(f"{_pct(row[str(h)]['median']) + f' ({row[str(h)]['win'] * 100:3.0f}%)':>18}"
+                            if str(h) in row else f"{'':>18}" for h in tradability.HOLDS)
             print(f"      +{lat:<2}s        {cells}")
-        edge = tradability.last_profitable_delay(table, args.hold)
+        edge = t["last_profitable_delay_s"]
         print(f"    → holding {args.hold}s, the typical trade made money only if filled by "
               + (f"+{edge}s." if edge is not None else "— never, even at the fastest fill."))
     print()
     return 0
-
-
-FIELDS = ["at", "source", "source_id", "symbol", "kind", "title", "pair", "status"]
 
 
 def cmd_export(args, conn) -> int:
@@ -96,11 +89,35 @@ def cmd_export(args, conn) -> int:
         json.dump(data, sys.stdout, ensure_ascii=False, indent=1)
         print()
         return 0
-    horizons = [str(h) for h in study.HORIZONS]
-    writer = csv.writer(sys.stdout)
-    writer.writerow(FIELDS + [f"abnormal_{h}s" for h in horizons])
-    for r in data:
-        writer.writerow([r[f] for f in FIELDS] + [(r["abnormal"] or {}).get(h, "") for h in horizons])
+    csv.writer(sys.stdout).writerows(summary.csv_rows(data))
+    return 0
+
+
+def cmd_keys(args, conn) -> int:
+    if args.action == "create":
+        from .api import PLANS
+        if args.plan not in PLANS:
+            print(f"  unknown plan {args.plan!r}; choose from {', '.join(PLANS)}")
+            return 2
+        key = store.create_key(conn, args.owner, args.plan)
+        print(f"  {key}\n  ↑ give this to {args.owner} ({args.plan} plan). It is not stored and won't be shown again.")
+    elif args.action == "list":
+        for k in store.list_keys(conn):
+            state = f"revoked {k['revoked_at'][:10]}" if k["revoked_at"] else f"last used {(k['last_used_at'] or 'never')[:16]}"
+            print(f"  #{k['id']:<4} {k['prefix']}…  {k['owner']:<24} {k['plan']:<9} {state}")
+    else:
+        ok = store.revoke_key(conn, args.id)
+        print(f"  key #{args.id} " + ("revoked." if ok else "not found or already revoked."))
+        return 0 if ok else 1
+    return 0
+
+
+def cmd_serve(args, conn) -> int:
+    import uvicorn
+
+    from .api import create_app
+    conn.close()                                        # the app opens its own, one per request
+    uvicorn.run(create_app(args.db), host=args.host, port=args.port)
     return 0
 
 
@@ -130,6 +147,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--kinds", default=",".join(ev.KINDS))
     p.add_argument("--format", choices=("csv", "json"), default="csv")
     p.set_defaults(run=cmd_export)
+
+    p = sub.add_parser("keys", help="create, list or revoke customer API keys")
+    keys = p.add_subparsers(dest="action", required=True)
+    k = keys.add_parser("create")
+    k.add_argument("owner", help="who the key is for, e.g. an email")
+    k.add_argument("--plan", default="research")
+    keys.add_parser("list")
+    k = keys.add_parser("revoke")
+    k.add_argument("id", type=int)
+    p.set_defaults(run=cmd_keys)
+
+    p = sub.add_parser("serve", help="run the HTTP API")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.set_defaults(run=cmd_serve)
 
     args = parser.parse_args(argv)
     conn = store.connect(args.db)

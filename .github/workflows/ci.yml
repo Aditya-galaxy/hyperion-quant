@@ -57,10 +57,11 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install test dependencies
-      run: pip install numpy pytest
+    - name: Install the package with test dependencies
+      run: pip install "./python[test]"
 
     # Offline by design: notice parsing runs on saved real notices, price
-    # arithmetic on hand-built series. No test reaches Upbit or Binance.
+    # arithmetic on hand-built series, the API on a hand-written database.
+    # No test reaches Upbit or Binance.
     - name: Run Python tests
       run: pytest python/tests -q

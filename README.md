@@ -24,6 +24,24 @@ hyperion-events report --kinds listing    # reaction + "how fast would I have to
 hyperion-events export --format csv > events.csv
 ```
 
+**HTTP API** (`pip install "./python[api]"`):
+
+```bash
+hyperion-events keys create alice@fund.com --plan pro    # prints the key once
+hyperion-events serve --port 8000                        # interactive docs at /docs
+curl -H "X-API-Key: hk_..." "localhost:8000/v1/stats?kind=listing&hold=300"
+```
+
+| Endpoint | Returns |
+|---|---|
+| `GET /v1/events` | Newest first; filter by `kind`, `symbol`, `since`, `until`, `status`; cursor paging; `format=csv` |
+| `GET /v1/events/{id}` | One event with its full tradability grid |
+| `GET /v1/stats?kind=` | Price reaction by horizon, net trade return by fill delay, and the slowest fill that still paid |
+| `GET /v1/meta` | Kinds, horizons, fill delays, fees; your plan and data cutoff |
+
+The `research` plan sees events once they're 30 days old (60 requests/min);
+`pro` sees them as soon as they're measured (600/min).
+
 Everything is stored in `data/hyperion.db` (SQLite). Re-running `ingest` only
 fetches what's new; events from the last couple of days stay *pending* until
 Binance publishes their price files. Read only: no keys, no accounts, no orders.
