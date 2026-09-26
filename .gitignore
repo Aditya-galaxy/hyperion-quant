@@ -46,3 +46,6 @@ guard/contracts/broadcast/
 guard/service/.venv/
 guard/service/*.egg-info/
 guard/paywall/node_modules/
+
+# Hyperion Guard demo hot keys (never commit)
+guard/demo/.env.arc
