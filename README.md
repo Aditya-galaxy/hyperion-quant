@@ -10,6 +10,26 @@
 
 ---
 
+## 📰 Hyperion Events: exchange notices vs. real prices
+
+The part of this repo measured on real data. Every Upbit trade notice
+(listings, delistings, caution designations) is matched against Binance's
+one-second price archive, and for each event it records how far the price moved
+and **how much of that move survived a fill 0–10 seconds late, after fees**.
+
+```bash
+pip install ./python
+hyperion-events ingest                    # fetch new notices, measure what's ready
+hyperion-events report --kinds listing    # reaction + "how fast would I have to be?"
+hyperion-events export --format csv > events.csv
+```
+
+Everything is stored in `data/hyperion.db` (SQLite). Re-running `ingest` only
+fetches what's new; events from the last couple of days stay *pending* until
+Binance publishes their price files. Read only: no keys, no accounts, no orders.
+
+---
+
 ## ⚡ Key Platform Capabilities
 
 1. **Statistical Arbitrage & Pairs Trading Engine (`src/quant/stat_arb.rs`):**
