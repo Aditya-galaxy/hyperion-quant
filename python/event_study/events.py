@@ -35,7 +35,7 @@ PER_PAGE = 20
 # One request every few seconds. This is an endpoint the website uses, not a
 # published API, and being throttled mid-backfill costs more than waiting.
 REQUEST_GAP_SECONDS = 3.0
-USER_AGENT = "hyperion-quant event-study (research; github.com/Aditya-galaxy/hyperion-quant)"
+USER_AGENT = "hyperion event-study (research; github.com/Aditya-galaxy/hyperion)"
 
 KINDS = ("listing", "delisting", "caution_on", "caution_extended", "caution_off", "warning")
 
