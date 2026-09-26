@@ -12,6 +12,9 @@
 
 ## 📰 Hyperion Events: exchange notices vs. real prices
 
+**Live site: [Hyperion Events](https://storage.googleapis.com/hyperion-events-site-kronagent/index.html)**:
+findings, charts and every event, with the data as CSV/JSON (CC BY-NC-SA 4.0).
+
 The part of this repo measured on real data. Every Upbit trade notice
 (listings, delistings, caution designations) is matched against Binance's
 one-second price archive, and for each event it records how far the price moved
