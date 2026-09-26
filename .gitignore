@@ -37,3 +37,4 @@ Thumbs.db
 
 # Event-study downloads (Binance archive, Upbit notices): rebuilt on demand
 data/event_study/
+/site/

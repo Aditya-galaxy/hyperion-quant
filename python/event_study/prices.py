@@ -19,13 +19,23 @@ import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 
 ARCHIVE = "https://data.binance.vision/data/spot/daily/klines/{sym}/1s/{sym}-1s-{day}.zip"
 USER_AGENT = "hyperion-quant event-study (research; github.com/Aditya-galaxy/hyperion-quant)"
+# Binance publishes a day's file some hours after the day ends. Until then a
+# 404 means "not yet", not "never", and must not be cached as missing.
+ARCHIVE_LAG = timedelta(days=2)
+
+
+def archive_settled(day: date, now: datetime | None = None) -> bool:
+    """Whether the archive has had time to publish `day`, so that a missing
+    file really means the symbol was not trading."""
+    now = now or datetime.now(timezone.utc)
+    return datetime(day.year, day.month, day.day, tzinfo=timezone.utc) + timedelta(days=1) + ARCHIVE_LAG <= now
 
 
 def to_seconds(raw: np.ndarray) -> np.ndarray:
@@ -44,9 +54,20 @@ def to_seconds(raw: np.ndarray) -> np.ndarray:
 
 @dataclass
 class Series:
-    """Closing prices of consecutive one-second bars."""
+    """Consecutive one-second bars. A second with no trades has no bar."""
     open_s: np.ndarray            # bar open time, seconds since the epoch, ascending
     close: np.ndarray
+    high: np.ndarray | None = None
+    low: np.ndarray | None = None
+    quote_volume: np.ndarray | None = None   # traded value in the quote asset (USDT)
+
+    def bar_covering(self, t: float) -> int | None:
+        """Index of the bar that covers [T, T+1) around `t`, or None if
+        nothing traded in that second."""
+        idx = int(np.searchsorted(self.open_s, t, side="right")) - 1
+        if idx < 0 or t >= self.open_s[idx] + 1.0:
+            return None
+        return idx
 
     def price_at(self, t: float, max_stale: float = 120.0) -> float | None:
         """The last price known at time `t`: the close of the latest bar that
@@ -87,7 +108,8 @@ def fetch_day(symbol: str, day: str, cache: Path) -> bytes | None:
     blob = _get(url)
     cache.mkdir(parents=True, exist_ok=True)
     if blob is None:
-        missing.touch()
+        if archive_settled(date.fromisoformat(day)):
+            missing.touch()
         return None
 
     checksum = _get(url + ".CHECKSUM")
@@ -108,9 +130,10 @@ def verify(blob: bytes, checksum_text: str, name: str) -> None:
 def parse_day(blob: bytes) -> Series:
     with zipfile.ZipFile(io.BytesIO(blob)) as archive:
         text = archive.read(archive.namelist()[0])
-    # Columns: open_time, open, high, low, close, volume, close_time, ...
-    data = np.loadtxt(io.BytesIO(text), delimiter=",", usecols=(0, 4), ndmin=2)
-    return Series(open_s=to_seconds(data[:, 0]), close=data[:, 1])
+    # Columns: open_time, open, high, low, close, volume, close_time, quote_volume, ...
+    data = np.loadtxt(io.BytesIO(text), delimiter=",", usecols=(0, 2, 3, 4, 7), ndmin=2)
+    return Series(open_s=to_seconds(data[:, 0]), high=data[:, 1], low=data[:, 2],
+                  close=data[:, 3], quote_volume=data[:, 4])
 
 
 def load(symbol: str, start: datetime, end: datetime, cache: Path) -> Series | None:
@@ -125,5 +148,8 @@ def load(symbol: str, start: datetime, end: datetime, cache: Path) -> Series | N
             return None
         parts.append(parse_day(blob))
         day += timedelta(days=1)
-    return Series(open_s=np.concatenate([p.open_s for p in parts]),
-                  close=np.concatenate([p.close for p in parts]))
+    def joined(field: str) -> np.ndarray | None:
+        columns = [getattr(p, field) for p in parts]
+        return None if any(c is None for c in columns) else np.concatenate(columns)
+    return Series(open_s=joined("open_s"), close=joined("close"), high=joined("high"),
+                  low=joined("low"), quote_volume=joined("quote_volume"))

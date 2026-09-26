@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hyperion Events</title>
+<meta name="description" content="What Upbit trade notices do to Binance prices, second by second, and how fast a trader would have had to be.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --series-1: #2a78d6;
+  --pos: #2a78d6;
+  --neg: #e34948;
+  --wash: rgba(42, 120, 214, 0.07);
+  --ref: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --pos: #3987e5;
+    --neg: #e66767;
+    --wash: rgba(57, 135, 229, 0.10);
+    --ref: #898781;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --series-1: #3987e5;
+  --pos: #3987e5;
+  --neg: #e66767;
+  --wash: rgba(57, 135, 229, 0.10);
+  --ref: #898781;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+a { color: var(--series-1); }
+h1 { font-size: 28px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+h2 { font-size: 19px; margin: 40px 0 4px; }
+h3 { font-size: 15px; margin: 0 0 2px; }
+p { margin: 0 0 12px; }
+.lede { color: var(--ink-2); font-size: 17px; max-width: 62ch; }
+.small { font-size: 13px; color: var(--ink-2); }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+
+.filters {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+  margin: 24px -16px 0; padding: 10px 16px;
+  background: var(--page); border-bottom: 1px solid var(--border);
+}
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button {
+  font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2);
+  padding: 6px 10px; cursor: pointer; min-height: 32px; white-space: nowrap; flex: none;
+}
+#kinds { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+#kinds::-webkit-scrollbar { display: none; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; }
+.seg button:focus-visible, select:focus-visible, input:focus-visible, .row:focus-visible { outline: 2px solid var(--series-1); outline-offset: -2px; }
+label.ctl { font-size: 13px; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
+select, input[type="search"] {
+  font: inherit; font-size: 13px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; min-height: 32px;
+}
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 20px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.tile .k { font-size: 13px; color: var(--ink-2); }
+.tile .v { font-size: 30px; font-weight: 600; line-height: 1.25; margin-top: 4px; }
+.tile .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 12px; }
+.card-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; }
+.chart { position: relative; margin-top: 8px; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.chart .lbl { fill: var(--ink-2); }
+.chart .val { fill: var(--ink); font-weight: 600; }
+
+.tip {
+  position: absolute; pointer-events: none; z-index: 10; min-width: 150px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); display: none;
+}
+.tip b { font-weight: 600; }
+
+details.tv { margin-top: 10px; }
+details.tv summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { font-weight: 600; color: var(--ink-2); }
+th:first-child, td:first-child { text-align: left; }
+td.l, th.l { text-align: left; }
+
+.feed .row { cursor: pointer; }
+.feed .row:hover td { background: var(--wash); }
+.feed tr.detail td { background: var(--surface); white-space: normal; text-align: left; }
+.badge { font-size: 12px; color: var(--ink-2); }
+.more { margin-top: 10px; font: inherit; font-size: 13px; background: var(--surface); color: var(--ink);
+        border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+
+.method li { margin-bottom: 6px; }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--ink-2); }
+@media (max-width: 560px) {
+  h1 { font-size: 23px; }
+  .lede { font-size: 15px; }
+  .tiles { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tile { padding: 10px 12px; }
+  .tile .v { font-size: 22px; }
+  .hide-sm { display: none; }
+  .filters { margin-top: 16px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>What exchange notices do to crypto prices, second by second</h1>
+  <p class="lede">Every trade notice Upbit published, matched against Binance's one-second price archive:
+    how far the price moved, and how much of that move a trader could still have kept after fees if their order was filled a few seconds late.</p>
+  <p class="small" id="asof"></p>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <div class="seg" id="kinds" role="group" aria-label="Kind of notice"></div>
+    <label class="ctl">Fill
+      <select id="fill">
+        <option value="worst">worst (bar extreme)</option>
+        <option value="fair">fair (last trade)</option>
+      </select>
+    </label>
+    <label class="ctl">Hold
+      <select id="hold"></select>
+    </label>
+  </div>
+
+  <section aria-labelledby="h-headline">
+    <h2 id="h-headline" class="visually-hidden" style="position:absolute;left:-9999px">Headline</h2>
+    <div class="tiles" id="tiles"></div>
+    <p class="small" id="finding" style="margin-top:12px"></p>
+  </section>
+
+  <section aria-labelledby="h-path">
+    <h2 id="h-path">The price around the notice</h2>
+    <p class="small" id="path-sub"></p>
+    <div class="card">
+      <div class="card-head">
+        <h3 id="path-title"></h3>
+        <div class="seg" id="span" role="group" aria-label="Time span">
+          <button type="button" data-v="300" aria-pressed="true">First 5 min</button>
+          <button type="button" data-v="1800" aria-pressed="false">30 min</button>
+        </div>
+      </div>
+      <div class="chart" id="path-chart"></div>
+      <details class="tv"><summary>Show as a table</summary><div class="scroll" id="path-table"></div></details>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-fill">
+    <h2 id="h-fill">How fast would you have had to be?</h2>
+    <p class="small" id="fill-sub"></p>
+    <div class="card">
+      <div class="card-head"><h3 id="fill-title"></h3></div>
+      <div class="chart" id="fill-chart"></div>
+      <details class="tv"><summary>Every fill delay and hold, as a table</summary><div class="scroll" id="fill-table"></div></details>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-feed">
+    <h2 id="h-feed">Every event</h2>
+    <p class="small">Newest first. Select a row to see its price path against the median. Moves are the coin's return minus BTC's over the same window.</p>
+    <div class="card">
+      <div class="card-head">
+        <h3 id="feed-title"></h3>
+        <input type="search" id="q" placeholder="Find a coin, e.g. SOPH" aria-label="Find a coin">
+      </div>
+      <div class="scroll feed">
+        <table>
+          <thead><tr>
+            <th class="l">Notice (UTC)</th><th class="l">Coin</th><th class="l hide-sm">Kind</th>
+            <th>+10 s</th><th>+5 min</th><th class="l hide-sm">Status</th><th class="l">Source</th>
+          </tr></thead>
+          <tbody id="feed"></tbody>
+        </table>
+      </div>
+      <button type="button" class="more" id="more" hidden>Show more</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-method" class="method">
+    <h2 id="h-method">How this is measured</h2>
+    <ul class="small">
+      <li><b>When:</b> each notice's first publication time on Upbit, not its last edit. Amended notices are re-stamped hours later; timing from the edit would start after the market had already moved.</li>
+      <li><b>Price:</b> Binance spot, one-second bars, in USDT. A price at time <i>t</i> is the close of the last bar that had finished by <i>t</i>, so nothing reads the future.</li>
+      <li><b>Move:</b> the coin's return minus BTC's over the same window, so a market-wide move isn't credited to the notice. The chart and the trade use the coin's own price.</li>
+      <li><b>Trade:</b> long a listing or a lifted caution; short a delisting, caution or warning. Filled a given number of seconds after the notice, closed after the hold, <span id="fee-note"></span> taker fee on each side.
+        <b>Worst</b> fill is the bar's extreme against you in the second your order arrives (its high for a buy); <b>fair</b> is the last trade price, which flatters a fast market.
+        A 0 s fair fill is the price before the notice: the size of the whole move, which no one gets.</li>
+      <li><b>Read the median.</b> A few listings that doubled carry the mean; the typical event is the median.</li>
+      <li><b>What's missing:</b> coins not trading on Binance at the time (a large share of Upbit listings), order-book depth, and whether a short was even possible. Small groups prove little: every chart shows how many events it rests on.</li>
+    </ul>
+    <p class="small">Data: <a href="events.csv">events.csv</a> · <a href="data.json">data.json</a> · <a href="LICENSE-DATA.txt">licence</a> · code: <a href="https://github.com/Aditya-galaxy/hyperion-quant">github.com/Aditya-galaxy/hyperion-quant</a> (MIT)</p>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(() => {
+  "use strict";
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const kinds = Object.keys(D.kinds);
+  const state = { kind: kinds.includes("listing") ? "listing" : kinds[0], fill: "worst", hold: 300, span: 300, q: "", shown: 40, open: null };
+  const $ = (id) => document.getElementById(id);
+  const SVG = "http://www.w3.org/2000/svg";
+  const tip = $("tip");
+
+  // ── formatting ────────────────────────────────────────────────────────────
+  const pct = (x, d = 1) => x == null ? "—" : (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x * 100).toFixed(d) + "%";
+  const secs = (s) => s === 0 ? "0 s" : Math.abs(s) >= 60 && s % 60 === 0 ? (s > 0 ? "+" : "−") + Math.abs(s / 60) + " min" : (s > 0 ? "+" : "−") + Math.abs(s) + " s";
+  const holdName = (h) => h >= 60 ? h / 60 + " min" : h + " s";
+  const day = (iso) => iso.slice(0, 10);
+  const when = (iso) => iso.slice(0, 16).replace("T", " ");
+  const el = (tag, attrs = {}, text) => {
+    const n = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  const niceStep = (range, target) => {
+    const raw = range / target, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / mag;
+    return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
+  };
+
+  // ── tooltip ───────────────────────────────────────────────────────────────
+  function showTip(host, x, y, html) {
+    tip.innerHTML = html;
+    tip.style.display = "block";
+    const r = host.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = r.left + window.scrollX + x + 14, top = r.top + window.scrollY + y - th - 10;
+    if (left + tw > window.scrollX + document.documentElement.clientWidth - 8) left = r.left + window.scrollX + x - tw - 14;
+    if (top < window.scrollY + 8) top = r.top + window.scrollY + y + 14;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+  const hideTip = () => { tip.style.display = "none"; };
+
+  // ── line chart: a path over time, with an optional band and reference ─────
+  function lineChart(host, { xs, ys, lo, hi, ns, ref, refLabel, xmax, height = 280, label }) {
+    host.innerHTML = "";
+    const W = Math.max(280, host.clientWidth), H = height;
+    const m = { l: 48, r: 16, t: 12, b: 28 };
+    const idx = xs.map((x, i) => i).filter((i) => xs[i] <= xmax);
+    const vals = [];
+    for (const i of idx) for (const a of [ys, lo, hi, ref]) if (a && a[i] != null) vals.push(a[i]);
+    if (!vals.length) { host.textContent = "No prices in this window."; return; }
+    let y0 = Math.min(0, ...vals), y1 = Math.max(0, ...vals);
+    const pad = (y1 - y0) * 0.08 || 0.01; y0 -= pad; y1 += pad;
+    const x0 = xs[idx[0]], x1 = xmax;
+    const X = (x) => m.l + (x - x0) / (x1 - x0) * (W - m.l - m.r);
+    const Y = (y) => m.t + (y1 - y) / (y1 - y0) * (H - m.t - m.b);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": label });
+
+    const ys_ = niceStep(y1 - y0, 5);
+    for (let v = Math.ceil(y0 / ys_) * ys_; v <= y1; v += ys_) {
+      const zero = Math.abs(v) < ys_ / 1e6;
+      svg.append(el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: zero ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+      svg.append(el("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, pct(zero ? 0 : v, ys_ < 0.01 ? 1 : 0)));
+    }
+    const xs_ = (xmax <= 300 ? 60 : 300) * (W < 460 ? 2 : 1);      // fewer ticks on a phone
+    for (let v = Math.ceil(x0 / xs_) * xs_; v <= x1; v += xs_) {
+      svg.append(el("text", { x: X(v), y: H - 8, "text-anchor": "middle" }, secs(v)));
+    }
+    svg.append(el("line", { x1: X(0), x2: X(0), y1: m.t, y2: H - m.b, stroke: "var(--axis)", "stroke-width": 1 }));
+    svg.append(el("text", { x: X(0) + 4, y: m.t + 10, class: "lbl" }, "notice"));
+
+    const line = (arr) => {
+      let d = "", pen = false;
+      for (const i of idx) {
+        if (arr[i] == null) { pen = false; continue; }
+        d += (pen ? "L" : "M") + X(xs[i]).toFixed(1) + " " + Y(arr[i]).toFixed(1);
+        pen = true;
+      }
+      return d;
+    };
+    if (lo && hi) {
+      let top = "", bot = "";
+      const ok = idx.filter((i) => lo[i] != null && hi[i] != null);
+      ok.forEach((i, k) => { top += (k ? "L" : "M") + X(xs[i]).toFixed(1) + " " + Y(hi[i]).toFixed(1); });
+      ok.slice().reverse().forEach((i) => { bot += "L" + X(xs[i]).toFixed(1) + " " + Y(lo[i]).toFixed(1); });
+      svg.append(el("path", { d: top + bot + "Z", fill: "var(--series-1)", "fill-opacity": 0.14, stroke: "none" }));
+    }
+    if (ref) {
+      svg.append(el("path", { d: line(ref), fill: "none", stroke: "var(--ref)", "stroke-width": 1.5 }));
+      const last = idx.filter((i) => ref[i] != null).pop();
+      if (last != null && refLabel) svg.append(el("text", { x: X(xs[last]) - 2, y: Y(ref[last]) - 6, "text-anchor": "end", class: "lbl" }, refLabel));
+    }
+    svg.append(el("path", { d: line(ys), fill: "none", stroke: "var(--series-1)", "stroke-width": 2, "stroke-linejoin": "round" }));
+
+    const cross = el("line", { y1: m.t, y2: H - m.b, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" });
+    const dot = el("circle", { r: 4.5, fill: "var(--series-1)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" });
+    svg.append(cross, dot);
+    const hit = el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent", tabindex: 0 });
+    svg.append(hit);
+    let cur = null;
+    const at = (i) => {
+      cur = i;
+      if (ys[i] == null) return;
+      const cx = X(xs[i]), cy = Y(ys[i]);
+      cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+      dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.setAttribute("visibility", "visible");
+      let h = `<b>${secs(xs[i])}</b> from the notice<br>${lo ? "Median " : ""}${pct(ys[i])}`;
+      if (lo && lo[i] != null) h += `<br><span class="muted">Middle half ${pct(lo[i])} to ${pct(hi[i])}</span>`;
+      if (ref && ref[i] != null) h += `<br><span class="muted">${refLabel} ${pct(ref[i])}</span>`;
+      if (ns) h += `<br><span class="muted">${ns[i]} events</span>`;
+      showTip(host, cx, cy, h);
+    };
+    const nearest = (px) => {
+      let best = idx[0], bd = Infinity;
+      for (const i of idx) { const d = Math.abs(X(xs[i]) - px); if (d < bd) { bd = d; best = i; } }
+      return best;
+    };
+    hit.addEventListener("pointermove", (e) => {
+      const r = svg.getBoundingClientRect();
+      at(nearest((e.clientX - r.left) * (W / r.width)));
+    });
+    hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); hideTip(); });
+    hit.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      const k = cur == null ? idx.indexOf(xs.indexOf(0)) : idx.indexOf(cur) + (e.key === "ArrowRight" ? 1 : -1);
+      at(idx[Math.max(0, Math.min(idx.length - 1, k))]);
+    });
+    hit.addEventListener("blur", () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); hideTip(); });
+    host.append(svg);
+  }
+
+  // ── bar chart: median net return by fill delay ────────────────────────────
+  function barChart(host, { cats, vals, extra, label, height = 240 }) {
+    host.innerHTML = "";
+    const W = Math.max(280, host.clientWidth), H = height;
+    const m = { l: 48, r: 12, t: 22, b: 30 };
+    const present = vals.filter((v) => v != null);
+    let y0 = Math.min(0, ...present), y1 = Math.max(0, ...present);
+    const pad = (y1 - y0) * 0.15 || 0.01; y0 -= pad; y1 += pad;
+    const Y = (y) => m.t + (y1 - y) / (y1 - y0) * (H - m.t - m.b);
+    const band = (W - m.l - m.r) / cats.length, bw = Math.min(56, band * 0.56);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": label });
+    const st = niceStep(y1 - y0, 5);
+    for (let v = Math.ceil(y0 / st) * st; v <= y1; v += st) {
+      const zero = Math.abs(v) < st / 1e6;
+      if (!zero) svg.append(el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }));
+      svg.append(el("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, pct(zero ? 0 : v, st < 0.01 ? 1 : 0)));
+    }
+    cats.forEach((c, i) => {
+      const cx = m.l + band * (i + 0.5), v = vals[i];
+      svg.append(el("text", { x: cx, y: H - 10, "text-anchor": "middle" }, c));
+      if (v == null) return;
+      const yv = Y(v), yz = Y(0), top = Math.min(yv, yz), h = Math.max(1, Math.abs(yv - yz)), r = Math.min(4, h / 2);
+      const up = v >= 0, x = cx - bw / 2;
+      // rounded at the data end only, square at the baseline
+      const d = up
+        ? `M${x} ${yz}V${top + r}Q${x} ${top} ${x + r} ${top}H${x + bw - r}Q${x + bw} ${top} ${x + bw} ${top + r}V${yz}Z`
+        : `M${x} ${yz}V${top + h - r}Q${x} ${top + h} ${x + r} ${top + h}H${x + bw - r}Q${x + bw} ${top + h} ${x + bw} ${top + h - r}V${yz}Z`;
+      svg.append(el("path", { d, fill: up ? "var(--pos)" : "var(--neg)" }));
+      svg.append(el("text", { x: cx, y: up ? yv - 6 : yv + 14, "text-anchor": "middle", class: "val" }, pct(v)));
+      const hit = el("rect", { x: cx - band / 2, y: m.t, width: band, height: H - m.t - m.b, fill: "transparent", tabindex: 0 });
+      const show = () => showTip(host, cx, yv, extra(i));
+      hit.addEventListener("pointerenter", show);
+      hit.addEventListener("focus", show);
+      hit.addEventListener("pointerleave", hideTip);
+      hit.addEventListener("blur", hideTip);
+      svg.append(hit);
+    });
+    svg.append(el("line", { x1: m.l, x2: W - m.r, y1: Y(0), y2: Y(0), stroke: "var(--axis)", "stroke-width": 1 }));
+    host.append(svg);
+  }
+
+  // ── tables ────────────────────────────────────────────────────────────────
+  function table(host, head, rows) {
+    const t = document.createElement("table");
+    const tr = t.createTHead().insertRow();
+    head.forEach((h) => { const th = document.createElement("th"); th.textContent = h; tr.append(th); });
+    const b = t.createTBody();
+    rows.forEach((r) => { const row = b.insertRow(); r.forEach((c) => { row.insertCell().textContent = c; }); });
+    host.innerHTML = ""; host.append(t);
+  }
+
+  // ── sections ──────────────────────────────────────────────────────────────
+  function renderControls() {
+    const seg = $("kinds"); seg.innerHTML = "";
+    for (const k of kinds) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = `${D.kinds[k].label} (${D.kinds[k].n})`;
+      b.setAttribute("aria-pressed", String(k === state.kind));
+      b.onclick = () => { state.kind = k; state.shown = 40; state.open = null; render(); };
+      seg.append(b);
+    }
+    const hold = $("hold");
+    if (!hold.options.length) for (const h of D.holds) hold.add(new Option(holdName(h), h, h === state.hold, h === state.hold));
+  }
+
+  function renderHeadline() {
+    const k = D.kinds[state.kind], long = k.side === "long";
+    const move10 = k.abnormal["10"].median, move300 = k.abnormal["300"].median;
+    const t = k.trade[state.fill], hold = String(state.hold);
+    const late1 = t["1"] && t["1"][hold], late5 = t["5"] && t["5"][hold];
+    const edge = k.last_profitable[state.fill][hold];
+    const tiles = [
+      ["Median move, 10 s after", pct(move10), "coin vs BTC"],
+      [`Median ${long ? "long" : "short"}, filled 1 s late`, late1 ? pct(late1.median) : "—", `held ${holdName(state.hold)}, after fees · wins ${late1 ? Math.round(late1.win * 100) : "—"}%`],
+      ["Filled 5 s late", late5 ? pct(late5.median) : "—", `wins ${late5 ? Math.round(late5.win * 100) : "—"}%`],
+      ["Slowest fill that still paid", edge == null ? "none" : "+" + edge + " s", "for the median trade"],
+    ];
+    const host = $("tiles"); host.innerHTML = "";
+    for (const [key, v, s] of tiles) {
+      const d = document.createElement("div"); d.className = "tile";
+      d.innerHTML = `<div class="k"></div><div class="v"></div><div class="s"></div>`;
+      d.children[0].textContent = key; d.children[1].textContent = v; d.children[2].textContent = s;
+      host.append(d);
+    }
+    const n = k.n, small = n < 30;
+    let f;
+    if (edge == null) f = `Even filled in the same second, the median ${long ? "long" : "short"} lost money after fees.`;
+    else if (edge === 0) f = `Only a fill in the same second as the notice kept any of the move for the median trade. One second late, the median ${long ? "long" : "short"} returned ${late1 ? pct(late1.median) : "—"} after fees. This is a race against machines.`;
+    else f = `The median ${long ? "long" : "short"} still paid when filled up to ${edge} s after the notice. By 5 minutes the median move was ${pct(move300)}.`;
+    if (small) f += ` Only ${n} events: treat this as a lead, not a result.`;
+    $("finding").textContent = f;
+  }
+
+  function renderPath() {
+    const k = D.kinds[state.kind];
+    $("path-title").textContent = `${k.label}: the coin's price relative to just before the notice`;
+    $("path-sub").textContent = `Median across ${k.n} events, with the middle half of events shaded. Hover or use the arrow keys for values.`;
+    lineChart($("path-chart"), {
+      xs: D.offsets, ys: k.path.median, lo: k.path.p25, hi: k.path.p75, ns: k.path.n, xmax: state.span,
+      label: `${k.label}: median price path around the notice`,
+    });
+    const pick = D.offsets.map((x, i) => i).filter((i) => [-60, -10, 0, 1, 2, 3, 5, 10, 30, 60, 120, 300, 900, 1800].includes(D.offsets[i]));
+    table($("path-table"), ["From notice", "Median", "25th pct", "75th pct", "Events"],
+      pick.map((i) => [secs(D.offsets[i]), pct(k.path.median[i]), pct(k.path.p25[i]), pct(k.path.p75[i]), k.path.n[i]]));
+  }
+
+  function renderFill() {
+    const k = D.kinds[state.kind], t = k.trade[state.fill], hold = String(state.hold);
+    const cats = D.latencies.map((l) => "+" + l + " s");
+    const cells = D.latencies.map((l) => t[String(l)] && t[String(l)][hold]);
+    $("fill-title").textContent = `${k.label}: median ${k.side} trade, held ${holdName(state.hold)}, after fees, by how late it was filled`;
+    $("fill-sub").textContent = `${state.fill === "worst" ? "Worst fill: the bar's extreme against the trade in the second the order lands." : "Fair fill: the last trade price, which flatters a fast market."} A 0 s fill is in the same second as the notice${state.fill === "fair" ? " — at the pre-notice price, which no one gets" : ""}.`;
+    barChart($("fill-chart"), {
+      cats, vals: cells.map((c) => c ? c.median : null),
+      label: `Median net return by fill delay for ${k.label}`,
+      extra: (i) => { const c = cells[i]; return `<b>Filled ${cats[i]}</b><br>Median ${pct(c.median)} · mean ${pct(c.mean)}<br><span class="muted">Won ${Math.round(c.win * 100)}% of ${c.n} trades</span>`; },
+    });
+    const head = ["Filled at", ...D.holds.map((h) => "hold " + holdName(h))];
+    table($("fill-table"), head, D.latencies.map((l) => ["+" + l + " s", ...D.holds.map((h) => {
+      const c = t[String(l)] && t[String(l)][String(h)];
+      return c ? `${pct(c.median)} (${Math.round(c.win * 100)}%)` : "";
+    })]));
+  }
+
+  function renderFeed() {
+    const k = D.kinds[state.kind], q = state.q.trim().toUpperCase();
+    const all = D.events.filter((e) => e.kind === state.kind && (!q || e.symbol.includes(q)));
+    $("feed-title").textContent = `${k.label}: ${all.length} notices, ${k.counts.ok} measured, ${k.counts.no_pair + k.counts.no_price} not on Binance${k.counts.pending ? `, ${k.counts.pending} waiting for prices` : ""}`;
+    const body = $("feed"); body.innerHTML = "";
+    const statusName = { ok: "measured", no_pair: "not on Binance", no_price: "gaps in trading", pending: "waiting for prices", unmeasured: "not yet measured" };
+    for (const e of all.slice(0, state.shown)) {
+      const tr = body.insertRow(); tr.className = "row"; tr.tabIndex = 0;
+      const cells = [when(e.at), e.symbol, k.label, pct(e.r10), pct(e.r300), statusName[e.status] || e.status, ""];
+      cells.forEach((c, i) => {
+        const td = tr.insertCell(); td.textContent = c;
+        if ([0, 1, 2, 5, 6].includes(i)) td.className = "l";
+        if (i === 2 || i === 5) td.classList.add("hide-sm");
+      });
+      if (e.url) {
+        const a = document.createElement("a"); a.href = e.url; a.textContent = "Upbit ↗"; a.target = "_blank"; a.rel = "noopener";
+        a.addEventListener("click", (ev) => ev.stopPropagation());
+        tr.lastChild.append(a);
+      }
+      const toggle = () => { state.open = state.open === e.id ? null : e.id; renderFeed(); };
+      tr.addEventListener("click", toggle);
+      tr.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); } });
+      tr.setAttribute("aria-expanded", String(state.open === e.id));
+      if (state.open === e.id) {
+        const d = body.insertRow(); d.className = "detail";
+        const td = d.insertCell(); td.colSpan = 7;
+        if (e.path) {
+          const c = document.createElement("div"); c.className = "chart"; td.append(c);
+          requestAnimationFrame(() => lineChart(c, {
+            xs: D.offsets, ys: e.path, ref: k.path.median, refLabel: `median of ${k.label.toLowerCase()}`,
+            xmax: 300, height: 200, label: `${e.symbol} price path around the notice`,
+          }));
+          const s = document.createElement("p"); s.className = "small"; s.style.margin = "6px 0 0";
+          s.textContent = `${e.symbol} (${e.pair}), coin's own price. Gray: the median ${k.label.toLowerCase()} path.`;
+          td.append(s);
+        } else {
+          td.innerHTML = `<p class="small" style="margin:4px 0"></p>`;
+          td.firstChild.textContent = e.status === "no_pair" ? `${e.symbol} wasn't trading on Binance that day, so there's no price to measure.` : "No price path for this event.";
+        }
+      }
+    }
+    $("more").hidden = all.length <= state.shown;
+  }
+
+  function render() {
+    renderControls(); renderHeadline(); renderPath(); renderFill(); renderFeed();
+  }
+
+  // ── wiring ────────────────────────────────────────────────────────────────
+  $("fill").onchange = (e) => { state.fill = e.target.value; renderHeadline(); renderFill(); };
+  $("hold").onchange = (e) => { state.hold = Number(e.target.value); renderHeadline(); renderFill(); };
+  $("q").oninput = (e) => { state.q = e.target.value; state.shown = 40; renderFeed(); };
+  $("more").onclick = () => { state.shown += 60; renderFeed(); };
+  for (const b of $("span").children) b.onclick = () => {
+    state.span = Number(b.dataset.v);
+    for (const x of $("span").children) x.setAttribute("aria-pressed", String(x === b));
+    renderPath();
+  };
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { renderPath(); renderFill(); if (state.open) renderFeed(); }, 150); });
+
+  const T = D.totals;
+  $("asof").textContent = `${T.events} events (one per coin per notice) from ${day(D.span.first)} to ${day(D.span.last)}; ${T.measured} measured against Binance prices, ${T.not_on_binance} for coins not trading there. Updated ${when(D.generated)} UTC.`;
+  $("fee-note").textContent = (D.fee * 100).toFixed(2) + "%";
+  $("footer").textContent = D.attribution;
+  const lic = document.createElement("a"); lic.href = D.license_url; lic.textContent = " CC BY-NC-SA 4.0";
+  $("footer").append(lic);
+  render();
+})();
+</script>
+</body>
+</html>

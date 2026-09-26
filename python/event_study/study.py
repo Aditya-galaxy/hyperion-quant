@@ -59,6 +59,27 @@ def measure(event: Event, series: Series, market: Series | None,
     return out
 
 
+# Every second from a minute before to two minutes after, where the action
+# is, then every 30 s out to half an hour: 237 points, enough to draw.
+PATH_OFFSETS = tuple(range(-60, 121)) + tuple(range(150, 1801, 30))
+
+
+def price_path(event: Event, series: Series,
+               offsets: tuple[int, ...] = PATH_OFFSETS) -> list[float | None] | None:
+    """The coin's own return from the last price before the notice, at each
+    offset: what a chart of the event shows. None where nothing has traded
+    for too long; None overall if there is no price before the notice."""
+    t0 = event.at.timestamp()
+    base = series.price_at(t0)
+    if base is None or base <= 0:
+        return None
+    out: list[float | None] = []
+    for dt in offsets:
+        p = series.price_at(t0 + dt)
+        out.append(None if p is None else round(p / base - 1.0, 6))
+    return out
+
+
 @dataclass
 class Outcome:
     event: Event

@@ -136,7 +136,24 @@ def fetch_upbit(cache: Path, since: datetime, refresh: bool = False) -> list[dic
             return cached
 
     notices: list[dict] = []
-    complete = False
+    complete = True
+    for batch in pages():
+        notices.extend(batch)
+        if all(notice_time(n) < since for n in batch):
+            complete = False
+            break
+
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text("".join(json.dumps(n, ensure_ascii=False) + "\n" for n in notices),
+                     encoding="utf-8")
+    _meta_path(cache).write_text(json.dumps({"complete": complete}))
+    return notices
+
+
+def pages():
+    """Upbit's trade notices, one page at a time, newest first, until the
+    history runs out. Callers stop iterating once they have gone back far
+    enough; nothing is fetched beyond the page they stop on."""
     page = 1
     while True:
         request = urllib.request.Request(UPBIT_NOTICES.format(page=page, per_page=PER_PAGE),
@@ -147,22 +164,24 @@ def fetch_upbit(cache: Path, since: datetime, refresh: bool = False) -> list[dic
             raise RuntimeError(f"Upbit refused page {page}: {body.get('error_message')}")
         batch = body["data"]["notices"]
         if not batch:
-            complete = True
-            break
-        notices.extend(batch)
-        if all(notice_time(n) < since for n in batch):
-            break
+            return
+        yield batch
         if page >= body["data"]["total_pages"]:
-            complete = True
-            break
+            return
         page += 1
         time.sleep(REQUEST_GAP_SECONDS)
 
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text("".join(json.dumps(n, ensure_ascii=False) + "\n" for n in notices),
-                     encoding="utf-8")
-    _meta_path(cache).write_text(json.dumps({"complete": complete}))
-    return notices
+
+def fetch_new(known_ids: set[str], since: datetime) -> list[dict]:
+    """Notices not in `known_ids`, back to `since`. Stops at the first page
+    that holds nothing new, so a daily update costs one or two requests."""
+    fresh: list[dict] = []
+    for batch in pages():
+        new = [n for n in batch if str(n["id"]) not in known_ids]
+        fresh.extend(n for n in new if notice_time(n) >= since)
+        if not new or all(notice_time(n) < since for n in batch):
+            break
+    return fresh
 
 
 def load_events(notices: list[dict], since: datetime, until: datetime | None = None,
