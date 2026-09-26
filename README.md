@@ -159,17 +159,34 @@ cargo test
 
 ---
 
-## ☁️ Google Cloud retraining job
+## ☁️ Google Cloud
 
-A Cloud Run job that re-scores the adverse-selection rule every night, on
-**simulated** data (see the [model card](hf_publish/README.md)):
-* **GCS Storage Bucket:** `gs://<YOUR_PROJECT_ID>-quant-models/models/`
-* **Cloud Run Job:** `hyperion-model-retrainer` (Serverless 2 vCPUs, 4GB RAM)
-* **Cloud Scheduler Cron:** `hyperion-nightly-retrain` (Triggers every night at **00:15 UTC**)
-* **Manual Trigger:**
-  ```bash
-  gcloud scheduler jobs run hyperion-nightly-retrain --location=us-central1
-  ```
+**The public site.** [`deploy_site.sh`](deploy_site.sh) rebuilds the site from
+`data/hyperion.db` and uploads it to its own public bucket
+(`hyperion-events-site-<project>`). Refresh it with:
+
+```bash
+hyperion-events ingest && bash deploy_site.sh
+```
+
+Ingest runs by hand for now, not on a schedule: Upbit's terms bar automated
+access without their permission, and that's been asked for.
+
+**The retraining job (paused).** [`deploy_cloud_trainer.sh`](deploy_cloud_trainer.sh)
+sets up a Cloud Run job, `hyperion-model-retrainer`, that runs
+`python/train_purged_cv.py`. The script re-scores the three hand-set decision
+stumps on freshly **simulated** data; nothing is trained on market data (see
+the [model card](hf_publish/README.md)). Its nightly trigger,
+`hyperion-nightly-retrain`, is **paused** because re-running it produced nothing
+new. To run it once, or switch the schedule back on:
+
+```bash
+gcloud run jobs execute hyperion-model-retrainer --region us-central1
+```
+
+```bash
+gcloud scheduler jobs resume hyperion-nightly-retrain --location=us-central1
+```
 
 ---
 

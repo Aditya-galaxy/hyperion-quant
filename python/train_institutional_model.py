@@ -1,11 +1,12 @@
 """
-Institutional Research Pipeline: End-to-End Quantitative Training & Export
-1. Loads real or high-fidelity synthesized tick trades (Polars).
-2. Computes multi-level OFI, micro-price skew, rolling volatility, and trade signed flow.
-3. Labels targets using the Triple-Barrier Method (de Prado).
-4. Trains a LightGBM Classifier with Purged Cross-Validation.
-5. Evaluates Out-Of-Sample AUC, Information Ratio, and Feature Importances (SHAP).
-6. Exports tree split structures directly to Rust-compatible weights JSON.
+Adverse-selection rule: simulate, score, export.
+1. Simulates order-book features (spread, micro-price skew, depth imbalance,
+   OFI, returns, volatility, trade flow) with numpy. No market data is read.
+2. Labels each tick with a noisy threshold on its own features.
+3. Scores three decision stumps with hand-set thresholds against that label
+   on an 80/20 split. Nothing is fitted; the trees are written out as-is.
+4. Exports the trees to the JSON the Rust evaluator loads.
+The scores measure agreement with the simulator, not market accuracy.
 """
 
 import json
@@ -166,7 +167,7 @@ def build_and_export_lightgbm_trees(X, y, out_json_path="python/lob_model_weight
 
 if __name__ == "__main__":
     print("=" * 80)
-    print("  HYPERION QUANT: INSTITUTIONAL ML TRAINING & EXPORT PIPELINE")
+    print("  HYPERION QUANT: ADVERSE-SELECTION RULE, SIMULATED DATA")
     print("=" * 80)
     X, y = compute_institutional_features(50_000)
     build_and_export_lightgbm_trees(X, y)

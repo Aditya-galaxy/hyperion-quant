@@ -1,7 +1,8 @@
 """
-Institutional Quantitative Data Pipeline: Real Binance Tick Data Downloader
-Downloads, extracts, and parses multi-day institutional tick-by-tick trade files
-from public Binance Vision S3 repositories with zero authentication required.
+Binance tick data downloader.
+Downloads, extracts, and parses daily trade files from the public Binance Vision
+archive (no authentication). The archive is licensed CC BY-NC-SA 4.0: research
+and other non-commercial use only; see python/event_study/terms.py.
 """
 
 import io
@@ -15,7 +16,7 @@ BINANCE_VISION_BASE = "https://data.binance.vision/data/spot/daily/trades"
 
 def download_daily_trades(symbol: str, date_str: str, out_dir: str = "data/raw") -> str:
     """
-    Downloads and extracts a single day of institutional tick trades.
+    Downloads and extracts a single day of trades.
     Example date_str: '2025-01-15'
     """
     os.makedirs(out_dir, exist_ok=True)

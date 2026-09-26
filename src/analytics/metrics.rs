@@ -7,7 +7,7 @@ pub struct TradeRecord {
     pub is_win: bool,
 }
 
-/// Key institutional performance metrics
+/// Performance metrics of a backtest
 #[derive(Debug, Clone, Copy)]
 pub struct PerformanceMetrics {
     pub total_trades: usize,
@@ -26,7 +26,7 @@ pub struct PerformanceMetrics {
     pub win_loss_ratio: f64,
 }
 
-/// Institutional quantitative metrics calculator
+/// Computes performance metrics from an equity curve and trade list
 pub struct QuantMetricsCalculator;
 
 impl QuantMetricsCalculator {

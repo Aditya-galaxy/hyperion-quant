@@ -72,8 +72,10 @@ impl TreeNode {
     }
 }
 
-/// High-performance, zero-allocation Gradient Boosted Decision Tree (GBDT) ensemble.
-/// Forward pass takes < 200 nanoseconds on CPU.
+/// Zero-allocation evaluator for an additive ensemble of decision trees
+/// (GBDT-style: each tree's output is scaled by `learning_rate` and summed).
+/// Nothing here trains trees: `default_production_model` is three stumps with
+/// hand-set thresholds. About 50 ns an evaluation on an Apple M1.
 #[derive(Debug, Clone)]
 pub struct DecisionTreeEnsemble {
     pub trees: Vec<TreeNode>,
