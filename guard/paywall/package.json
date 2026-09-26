@@ -1,0 +1,15 @@
+{
+  "name": "hyperion-guard-paywall",
+  "private": true,
+  "type": "module",
+  "description": "x402 payment proxy (Circle Gateway Nanopayments) in front of the Hyperion Guard API",
+  "engines": { "node": ">=22.6" },
+  "scripts": { "start": "node server.ts" },
+  "dependencies": {
+    "@circle-fin/x402-batching": "^3.5.0",
+    "@x402/core": "^2.27.0",
+    "@x402/evm": "^2.27.0",
+    "express": "^5.2.1",
+    "viem": "^2.56.9"
+  }
+}
