@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 
 ARCHIVE = "https://data.binance.vision/data/spot/daily/klines/{sym}/1s/{sym}-1s-{day}.zip"
-USER_AGENT = "hyperion-quant event-study (research; github.com/Aditya-galaxy/hyperion-quant)"
+USER_AGENT = "hyperion event-study (research; github.com/Aditya-galaxy/hyperion)"
 # Binance publishes a day's file some hours after the day ends. Until then a
 # 404 means "not yet", not "never", and must not be cached as missing.
 ARCHIVE_LAG = timedelta(days=2)

@@ -23,15 +23,15 @@ pretty_name: Hyperion-LOB — simulated adverse-selection benchmark
 
 # Hyperion-LOB: a simulated order-book benchmark and a hand-set adverse-selection rule
 
-[![GitHub Repository](https://img.shields.io/badge/GitHub-Aditya--galaxy%2Fhyperion--quant-blue?logo=github)](https://github.com/Aditya-galaxy/hyperion-quant)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Aditya--galaxy%2Fhyperion-blue?logo=github)](https://github.com/Aditya-galaxy/hyperion)
 [![Data](https://img.shields.io/badge/Data-simulated-lightgrey)](#read-this-first)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Aditya-galaxy/hyperion-quant/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Aditya-galaxy/hyperion/blob/main/LICENSE)
 
 ## Read this first
 
 - **Every record is simulated.** The data comes from
   `generate_microstructure_data()` in
-  [`python/train_test_pipeline.py`](https://github.com/Aditya-galaxy/hyperion-quant/blob/main/python/train_test_pipeline.py)
+  [`python/train_test_pipeline.py`](https://github.com/Aditya-galaxy/hyperion/blob/main/python/train_test_pipeline.py)
   (numpy, seed 42). No real market data was used to build, tune or evaluate
   anything on this page.
 - **The label does not come from what the market did next.**

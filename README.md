@@ -1,7 +1,7 @@
-# Hyperion Quant
+# Hyperion
 
 [![Live site](https://img.shields.io/badge/live-Hyperion%20Events-2a78d6.svg)](https://storage.googleapis.com/hyperion-events-site-kronagent/index.html)
-[![Build Status](https://github.com/Aditya-galaxy/hyperion-quant/actions/workflows/ci.yml/badge.svg)](https://github.com/Aditya-galaxy/hyperion-quant/actions)
+[![Build Status](https://github.com/Aditya-galaxy/hyperion/actions/workflows/ci.yml/badge.svg)](https://github.com/Aditya-galaxy/hyperion/actions)
 [![Code: MIT](https://img.shields.io/badge/code-MIT-yellow.svg)](LICENSE)
 [![Data: CC BY-NC-SA 4.0](https://img.shields.io/badge/data-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
@@ -122,8 +122,8 @@ apart, and no real-data backtest has been run.
 
 ### Clone & Build
 ```bash
-git clone https://github.com/Aditya-galaxy/hyperion-quant.git
-cd hyperion-quant
+git clone https://github.com/Aditya-galaxy/hyperion.git
+cd hyperion
 cargo build --release
 ```
 
