@@ -1,12 +1,31 @@
 # Hyperion Quant
 
-[![Rust](https://img.shields.io/badge/rust-v1.80+-orange.svg)](https://www.rust-lang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Live site](https://img.shields.io/badge/live-Hyperion%20Events-2a78d6.svg)](https://storage.googleapis.com/hyperion-events-site-kronagent/index.html)
 [![Build Status](https://github.com/Aditya-galaxy/hyperion-quant/actions/workflows/ci.yml/badge.svg)](https://github.com/Aditya-galaxy/hyperion-quant/actions)
-[![Backtest Speed](https://img.shields.io/badge/backtest-21.2M%20bars%2Fsec-blue.svg)]()
-[![Execution Latency](https://img.shields.io/badge/tick--to--trade-416ns-purple.svg)]()
+[![Code: MIT](https://img.shields.io/badge/code-MIT-yellow.svg)](LICENSE)
+[![Data: CC BY-NC-SA 4.0](https://img.shields.io/badge/data-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
-**Hyperion Quant** is an institutional-grade Quantitative Trading & Statistical Arbitrage Platform written in modern Rust. It merges a **sub-microsecond deterministic execution engine** with **mathematical alpha strategies** (Cointegration / Pairs Trading, Cash-and-Carry Basis Arbitrage), an **event-driven backtesting engine**, and **rigorous risk & performance analytics**.
+**What exchange notices do to crypto prices, second by second, and how fast
+you'd have had to be to trade them.** Hyperion matches every Upbit trade notice
+(listings, delistings, caution designations) against Binance's one-second price
+archive, and measures how much of each move was still there for an order filled
+0–10 seconds late, after fees.
+
+What the data says so far (433 events, 217 measurable on Binance):
+
+- **Listings (140):** a median move of **+13.6% within 10 seconds**. The median
+  trade only paid if it was filled **in the same second** as the notice.
+  Filled one second late, it returned **−1.1%** after fees. That race is run
+  by machines.
+- **Delistings (14):** shorting still paid when filled 10 seconds late. It's a
+  lead, not a result: 14 events is too few, and many of these coins can't be
+  shorted.
+
+**[See the charts and every event →](https://storage.googleapis.com/hyperion-events-site-kronagent/index.html)**
+
+The repo also holds a low-latency trading engine in Rust (see *The Rust
+engine* below). It's research and learning code:
+fast, tested, but run only on simulated data and not connected to any exchange.
 
 ---
 
@@ -15,10 +34,9 @@
 **Live site: [Hyperion Events](https://storage.googleapis.com/hyperion-events-site-kronagent/index.html)**:
 findings, charts and every event, with the data as CSV/JSON (CC BY-NC-SA 4.0).
 
-The part of this repo measured on real data. Every Upbit trade notice
-(listings, delistings, caution designations) is matched against Binance's
-one-second price archive, and for each event it records how far the price moved
-and **how much of that move survived a fill 0–10 seconds late, after fees**.
+For each event it records how far the price moved (against BTC, so a market-wide
+move isn't credited to the notice), the second-by-second price path, and the
+net result of the implied trade by fill delay and hold time.
 
 ```bash
 pip install ./python
@@ -60,93 +78,40 @@ Binance publishes their price files. Read only: no keys, no accounts, no orders.
 
 ---
 
-## ⚡ Key Platform Capabilities
+## ⚙️ The Rust engine (research code)
 
-1. **Statistical Arbitrage & Pairs Trading Engine (`src/quant/stat_arb.rs`):**
-   * Cointegrated synthetic spread estimation: $S_t = P_{A,t} - \beta P_{B,t}$.
-   * Online rolling mean and variance using Welford's formulation (zero heap allocations).
-   * Dynamic Z-Score triggers with mean-reversion exit thresholds and structural break stop-losses.
+The components of an exchange-grade trading stack, built to learn how they work
+and how fast they can be. **Read these numbers as engineering, not trading
+results.** Speeds are measured inside one process, with no network: a real
+order's trip to an exchange takes milliseconds, thousands of times longer. The
+strategies have been run only on simulated data. Nothing here signs or sends an
+order to an exchange.
 
-2. **Cash-and-Carry & Funding Rate Basis Arbitrage (`src/quant/basis_arb.rs`):**
-   * Delta-neutral yield harvesting exploiting crypto Perpetual Futures vs. Spot basis premiums.
-   * Real-time 8-hour funding rate APR annualization, net carry margin calculation, and auto-unwind triggers.
+| Component | What it is | What's been shown |
+|---|---|---|
+| Order book & matching (`src/orderbook/`, `src/matching/`) | L3 limit order book with O(1) price-level queues; FIFO price-time matching (limit, IOC, FOK) | Tests; median 83 ns add+cancel, 208 ns limit-order ingest |
+| Core (`src/core/`) | Slab arena and a lock-free SPSC ring buffer; no heap allocation on the hot path | Tests |
+| Pre-trade risk (`src/risk/`) | Fat-finger limits, price collars, throttles, kill switch | Tests; median 83 ns per check |
+| Simulated market (`src/main.rs`) | Quotes, risk, matching and order management in one loop against a simulated flow | Median **1.1 µs** tick-to-trade |
+| Backtester (`src/backtest/`) | Event-driven, with fees, slippage and delay | About **25M bars/s**; fed by a synthetic data generator |
+| Pairs trading (`src/quant/stat_arb.rs`) | Rolling z-score of a hedged spread (Welford, no allocations) | Simulated cointegrated pair only (see below) |
+| Basis trade (`src/quant/basis_arb.rs`) | Spot vs. perpetual funding carry, annualised | Hand-written scenarios |
+| Market making (`src/strategy/`) | Avellaneda–Stoikov inventory skew; order-flow-imbalance signal | Tests |
+| Adverse-selection rule (`src/quant/ml_model.rs`) | Three hand-set decision stumps over 8 order-book features; about 49 ns an evaluation | Agreement with a simulator's label; [model card](hf_publish/README.md) |
+| Feed parser (`src/feed/binance_feed.rs`) | Zero-copy parser for Binance `@bookTicker` and depth messages | Tests on sample messages |
 
-3. **Event-Driven Historical Backtesting Engine (`src/backtest/`):**
-   * High-throughput event simulator benchmarked at **> 21 Million bars/second**.
-   * Realistic market friction: maker/taker fee tiers, bid-ask slippage impact, and execution delay modeling.
+Timings are from `cargo run --release --bin benchmark`, `run_ml_alpha`,
+`run_stat_arb` and `hyperion-quant` on an Apple M1 laptop. They vary by machine
+and run; measure on yours.
 
-4. **Institutional Performance Analytics (`src/analytics/metrics.rs`):**
-   * Institutional metrics: **Sharpe Ratio**, **Sortino Ratio**, **Maximum Drawdown (MDD)**, **Calmar Ratio**, **Profit Factor**, and **Win Rate**.
+### About the pairs-trading backtest
 
-5. **Sub-Microsecond Embedded ML Adverse Selection Engine (`src/quant/ml_model.rs`):**
-   * Pure Rust Gradient Boosted Decision Tree (GBDT) ensemble running forward-passes in **71 nanoseconds** (**14.02 Million evals/sec**).
-   * Ingests 8-dimensional microstructure features (OFI, micro-price skew, queue imbalance, trade flow) and triggers dynamic quote spread widening under toxic institutional sweeps.
-
-6. **Exchange WebSocket Feed Parser (`src/feed/binance_feed.rs`):**
-   * Zero-copy, high-speed parser for streaming Binance `@bookTicker` and depth feeds without heavyweight serialization overhead.
-
-7. **Ultra-Low Latency Execution Substrate (`src/core/`, `src/orderbook/`, `src/matching/`, `src/risk/`):**
-   * Sub-microsecond deterministic execution (**416 ns** median tick-to-trade).
-   * Zero heap allocations on the hot path via continuous slab arenas and cache-aligned lock-free SPSC ring buffers.
-   * Sub-50ns pre-trade risk engine with fat-finger checks, price collars, throttle rates, and kill-switches.
-
----
-
-## 📊 Backtest Performance Example
-
-Simulated statistical arbitrage over 10,000 one-minute bars on a synthetic cointegrated crypto pair (e.g. BTC/ETH with $\beta = 18.5$, 4 bps fee, 2 bps slippage):
-
-```
-================================================================================
-                          PERFORMANCE & RISK REPORT                             
-================================================================================
-  Initial Capital:              $100,000.00
-  Final Equity:                 $103,766.73
-  Total Net PnL:                +$3,766.73
-  Cumulative Return:            +3.77%
-  Annualized Return:            +194.59%
-  Annualized Volatility:        6.70%
---------------------------------------------------------------------------------
-  Sharpe Ratio (Rf=4.5%):       28.37
-  Sortino Ratio:                42.67
-  Maximum Drawdown (MDD):       0.38%
-  Calmar Ratio:                 513.73
-  Profit Factor:                7.30
---------------------------------------------------------------------------------
-  Total Completed Trades:       215
-  Win Rate:                     71.6%
-  Average Win:                  +$28.34
-  Average Loss:                 -$9.80
-  Win / Loss Ratio:             2.89
-================================================================================
-```
-
----
-
-## 🏛️ System Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        HYPERION QUANT PLATFORM                         │
-├────────────────────────────────────────────────────────────────────────┤
-│ 🧠 QUANT ALPHA LAYER (Mathematical Signals & Portfolios)               │
-│   • Cointegration Pairs Trading (Rolling Welford Z-Score)              │
-│   • Spot-Perp Cash-and-Carry Basis Arbitrage (APR Funding Harvester)   │
-│   • Avellaneda-Stoikov Inventory Skewing Market Maker                  │
-│   • Order Flow Imbalance (OFI) Short-Horizon Alpha                     │
-├────────────────────────────────────────────────────────────────────────┤
-│ 📈 EVENT-DRIVEN BACKTESTER & INSTITUTIONAL ANALYTICS                   │
-│   • Synthetic & Historical Tick/Bar Ingestion (> 21M bars/sec)         │
-│   • Friction Simulation: Taker Fees, Maker Rebates, Slippage           │
-│   • Real-Time Metrics: Sharpe, Sortino, Calmar, Max Drawdown           │
-├────────────────────────────────────────────────────────────────────────┤
-│ ⚡ ULTRA-LOW LATENCY EXECUTION SUBSTRATE (< 1 µs)                       │
-│   • Zero-Allocation Continuous Arena & Lock-Free SPSC Ring Buffer      │
-│   • L3 Limit Order Book (LOB) with O(1) Doubly-Linked Queues           │
-│   • FIFO Price-Time Matching Engine (Limit, IOC, FOK)                  │
-│   • Sub-50ns Pre-Trade Risk Engine (Fat-Finger, Collars, Throttle)     │
-└────────────────────────────────────────────────────────────────────────┘
-```
+`cargo run --release --bin run_stat_arb` trades a **synthetic** pair that is
+generated to mean-revert: 10,000 one-minute bars, hedge ratio 18.5, 4 bps fees,
+2 bps slippage. It reports a Sharpe ratio of about 28 and a 0.38% maximum
+drawdown. That shows the engine and the metrics work. It is **not** evidence
+the strategy makes money: the data was built so that it would. Real pairs drift
+apart, and no real-data backtest has been run.
 
 ---
 
@@ -172,7 +137,7 @@ cargo run --release --bin run_stat_arb
 cargo run --release --bin run_basis_arb
 ```
 
-### 3. Run Sub-Microsecond ML Adverse Selection Defense
+### 3. Run the adverse-selection rule
 ```bash
 cargo run --release --bin run_ml_alpha
 ```
@@ -182,21 +147,22 @@ cargo run --release --bin run_ml_alpha
 cargo run --release --bin benchmark
 ```
 
-### 5. Run Live High-Throughput Market Simulation
+### 5. Run the simulated market (no exchange connection)
 ```bash
-cargo run --release --bin hyperion_quant
+cargo run --release --bin hyperion-quant
 ```
 
-### 6. Run Full Test Suite (13 Tests)
+### 6. Run the Rust test suite (14 tests)
 ```bash
 cargo test
 ```
 
 ---
 
-## ☁️ Google Cloud Automated Retraining Pipeline
+## ☁️ Google Cloud retraining job
 
-The platform includes an automated serverless retraining pipeline deployed on Google Cloud:
+A Cloud Run job that re-scores the adverse-selection rule every night, on
+**simulated** data (see the [model card](hf_publish/README.md)):
 * **GCS Storage Bucket:** `gs://<YOUR_PROJECT_ID>-quant-models/models/`
 * **Cloud Run Job:** `hyperion-model-retrainer` (Serverless 2 vCPUs, 4GB RAM)
 * **Cloud Scheduler Cron:** `hyperion-nightly-retrain` (Triggers every night at **00:15 UTC**)
@@ -209,4 +175,8 @@ The platform includes an automated serverless retraining pipeline deployed on Go
 
 ## 📄 License
 
-Licensed under the [MIT License](LICENSE).
+The **code** is [MIT](LICENSE). The **data** Hyperion Events publishes is
+derived from Binance Vision's archive and is licensed
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/):
+non-commercial use, credit Binance Vision, share alike. Not affiliated with or
+endorsed by Binance or Upbit. Research, not financial advice.
