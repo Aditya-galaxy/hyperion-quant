@@ -186,11 +186,12 @@ contract HyperionGuardTest is Test {
         HyperionGuard.Verdict memory rejected = verdict(h, false);
         assertEq(uint8(guard.check(rejected, sign(rejected, signerKey))), uint8(HyperionGuard.Status.NotApproved));
 
-        HyperionGuard.Verdict memory unknown = v;
+        // memory structs alias on assignment: build each variant fresh
+        HyperionGuard.Verdict memory unknown = verdict(h, true);
         unknown.agent = stranger;
         assertEq(uint8(guard.check(unknown, sign(unknown, signerKey))), uint8(HyperionGuard.Status.UnknownAgent));
 
-        HyperionGuard.Verdict memory tooLong = v;
+        HyperionGuard.Verdict memory tooLong = verdict(h, true);
         tooLong.expiresAt = uint64(block.timestamp + guard.MAX_VERDICT_TTL() + 1);
         assertEq(uint8(guard.check(tooLong, sign(tooLong, signerKey))), uint8(HyperionGuard.Status.Expired));
 
@@ -333,10 +334,41 @@ contract HyperionGuardTest is Test {
         assertEq(usdc.balanceOf(owner), 10_000e6);
     }
 
+    // ── vectors shared with the Python service (tests/test_guard.py) ─────────
+
+    /// The service signs what the contract verifies: the same digest from
+    /// the same verdict and domain. If this breaks, every signature fails.
+    function test_verdictDigestMatchesThePythonService() public view {
+        assertEq(address(guard), 0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f); // first CREATE from the test contract
+        HyperionGuard.Verdict memory v = HyperionGuard.Verdict({
+            agent: address(0xA1A1a1a1A1A1A1A1A1a1a1a1a1a1A1A1a1A1a1a1),
+            orderHash: 0xabababababababababababababababababababababababababababababababab,
+            approved: true,
+            reason: 0,
+            policyVersion: 1,
+            seq: 7,
+            expiresAt: 1_790_000_060
+        });
+        assertEq(guard.hashVerdict(v), 0x1aa970729120b515155762c75c9a2c80cd6ee2063c364f6d5b2994decb50ba07);
+    }
+
+    /// The service's executor order hash is GuardedExecutor.orderHash's encoding.
+    function test_executorOrderHashEncodingMatchesThePythonService() public pure {
+        bytes32 h = keccak256(
+            abi.encode(
+                uint256(31337),
+                address(0xe0E0e0e0e0E0E0e0E0e0e0e0e0e0E0e0e0e0e0e0),
+                address(0xD0D0d0d0d0D0D0d0D0D0D0D0d0D0d0d0d0d0D0D0),
+                keccak256(hex"deadbeef"),
+                uint256(650_000_000),
+                uint256(4)
+            )
+        );
+        assertEq(h, 0x97e53d86177a34484050182064ab45b43938f14d1e9cea6af687f174b317dee0);
+    }
+
     /// Whatever order is approved, a different call or notional never passes.
-    function testFuzz_onlyTheExactApprovedCallExecutes(uint256 approvedAmt, uint256 triedAmt, uint256 notional)
-        public
-    {
+    function testFuzz_onlyTheExactApprovedCallExecutes(uint256 approvedAmt, uint256 triedAmt, uint256 notional) public {
         vm.assume(approvedAmt != triedAmt);
         approvedAmt = bound(approvedAmt, 0, 1e30);
         triedAmt = bound(triedAmt, 0, 1e30);

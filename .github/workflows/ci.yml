@@ -65,3 +65,44 @@ jobs:
     # No test reaches Upbit or Binance.
     - name: Run Python tests
       run: pytest python/tests -q
+
+  guard_contracts:
+    name: Guard contracts (Foundry)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository (with contract libraries)
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+
+    - name: Check formatting
+      working-directory: guard/contracts
+      run: forge fmt --check
+
+    - name: Run contract tests
+      working-directory: guard/contracts
+      run: forge test -vv
+
+  guard_service:
+    name: Guard service (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install the service with test dependencies
+      run: pip install -e "guard/service[test]"
+
+    # Offline: a fake chain and fixed prices. No test reaches Arc or Pyth.
+    - name: Run service tests
+      run: pytest guard/service/tests -q

@@ -276,3 +276,19 @@ def test_api_agent_and_verdict_lookup(client, guard):
     guard.anchor()
     assert client.get("/v1/verdicts/1").json()["anchor"]["first_seq"] == 1
     assert client.get("/v1/health").json()["signer"] == SIGNER.address
+
+
+# ── vectors shared with the Solidity tests (guard/contracts/test) ────────────
+
+def test_verdict_digest_matches_the_contract():
+    """HyperionGuard.hashVerdict gives this digest for this verdict at the
+    Foundry test deployment (chain 31337, first CREATE address)."""
+    d = vd.Domain(31337, "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f")
+    v = vd.Verdict("0x" + "a1" * 20, "0x" + "ab" * 32, True, 0, 1, 7, 1_790_000_060)
+    _sig, digest = vd.sign(d, v, SIGNER.key.hex())            # the digest doesn't depend on the key
+    assert digest == "0x1aa970729120b515155762c75c9a2c80cd6ee2063c364f6d5b2994decb50ba07"
+
+
+def test_executor_order_hash_matches_the_contract_encoding():
+    assert vd.executor_order_hash(31337, "0x" + "e0" * 20, "0x" + "d0" * 20, "0xdeadbeef", 650_000_000, 4) == \
+        "0x97e53d86177a34484050182064ab45b43938f14d1e9cea6af687f174b317dee0"

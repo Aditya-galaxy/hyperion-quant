@@ -96,10 +96,7 @@ contract HyperionGuard is EIP712, Ownable2Step {
     error BadSequence(uint64 expectedFirst);
     error InvalidPolicy();
 
-    constructor(address initialAdmin, address initialSigner)
-        EIP712("HyperionGuard", "1")
-        Ownable(initialAdmin)
-    {
+    constructor(address initialAdmin, address initialSigner) EIP712("HyperionGuard", "1") Ownable(initialAdmin) {
         if (initialSigner == address(0)) revert ZeroAddress();
         guardSigner = initialSigner;
         emit GuardSignerChanged(address(0), initialSigner);

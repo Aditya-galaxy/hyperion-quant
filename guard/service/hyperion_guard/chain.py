@@ -54,8 +54,9 @@ class Chain:
             raise RpcError(f"{method}: {body['error']}")
         return body["result"]
 
-    def call(self, data: bytes) -> bytes:
-        out = self.rpc("eth_call", [{"to": self.guard, "data": "0x" + data.hex()}, "latest"])
+    def call(self, data: bytes, to: str | None = None) -> bytes:
+        out = self.rpc("eth_call", [{"to": to_checksum_address(to) if to else self.guard, "data": "0x" + data.hex()},
+                                    "latest"])
         return bytes.fromhex(out[2:])
 
     def agent(self, address: str) -> AgentState | None:
@@ -81,14 +82,17 @@ class Chain:
         data = _ANCHOR + encode(["uint64", "uint64", "bytes32"], [first, last, root])
         return self.transact(private_key, data, wait)
 
-    def transact(self, private_key: str, data: bytes, wait: float = 30.0) -> str:
+    def transact(self, private_key: str, data: bytes, wait: float = 30.0, to: str | None = None) -> str:
+        """Sign and send a call to `to` (default: the Guard contract) and wait
+        for it to be mined. Raises RpcError if it would revert or does."""
         acct = Account.from_key(private_key)
-        tx = {"from": acct.address, "to": self.guard, "data": "0x" + data.hex(), "value": 0}
+        target = to_checksum_address(to) if to else self.guard
+        tx = {"from": acct.address, "to": target, "data": "0x" + data.hex(), "value": 0}
         gas = int(self.rpc("eth_estimateGas", [tx]), 16)
         base = int(self.rpc("eth_gasPrice", []), 16)
         tip = 10**9
         signed = acct.sign_transaction({
-            "type": 2, "chainId": self.chain_id, "to": self.guard, "data": tx["data"], "value": 0,
+            "type": 2, "chainId": self.chain_id, "to": target, "data": tx["data"], "value": 0,
             "nonce": int(self.rpc("eth_getTransactionCount", [acct.address, "pending"]), 16),
             "gas": gas * 12 // 10, "maxPriorityFeePerGas": tip,
             "maxFeePerGas": max(base, MIN_BASE_FEE) * 2 + tip,

@@ -1,0 +1,6 @@
+[submodule "guard/contracts/lib/openzeppelin-contracts"]
+	path = guard/contracts/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "guard/contracts/lib/forge-std"]
+	path = guard/contracts/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

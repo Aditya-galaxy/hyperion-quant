@@ -1,9 +1,10 @@
 """
 HYPERION GUARD: THE PRE-TRADE CHECKS
 ====================================
-The same checks, in the same order, as the Rust controller in
-src/risk/controller.rs, applied to an agent's policy as its owner set it on
-Arc:
+Modelled on the Rust controller in src/risk/controller.rs (kill switch
+first, then size, collar and throttle), with a daily notional cap in place of
+its position limit, since the Guard sees orders, not fills. Applied to the
+agent's policy as its owner set it on Arc:
 
   1. kill switch          the owner (or guardian) stopped the agent on-chain
   2. order notional       a single order bigger than the policy allows
