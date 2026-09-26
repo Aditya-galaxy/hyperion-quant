@@ -77,5 +77,6 @@ def measure_one(conn: sqlite3.Connection, event_id: int, event: ev.Event, price_
     if abnormal is None:
         store.save_measurement(conn, event_id, pair, "no_price")
         return "no_price"
-    store.save_measurement(conn, event_id, pair, "ok", abnormal, tradability.measure(event, series))
+    store.save_measurement(conn, event_id, pair, "ok", abnormal, tradability.measure(event, series),
+                           study.price_path(event, series))
     return "ok"

@@ -28,7 +28,7 @@ from . import events as ev
 
 # Bump when the measurement changes, so stored numbers are recomputed rather
 # than silently mixed with ones made the old way.
-METHOD = 1
+METHOD = 2                       # 2: stores the price path for charts
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS notices (
@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS measurements (
     status       TEXT NOT NULL,           -- ok | no_pair | no_price | pending
     abnormal     TEXT,                    -- {horizon_s: return vs BTC}
     tradability  TEXT,                    -- see tradability.measure
+    path         TEXT,                    -- coin return at study.PATH_OFFSETS, for charts
     method       INTEGER NOT NULL,
     computed_at  TEXT NOT NULL
 );
@@ -84,6 +85,9 @@ def connect(path: Path | str, migrate: bool = True) -> sqlite3.Connection:
     if migrate:
         conn.execute("PRAGMA journal_mode = WAL")   # readers keep reading while ingest writes
         conn.executescript(SCHEMA)
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(measurements)")}
+        if "path" not in columns:                    # databases made before METHOD 2
+            conn.execute("ALTER TABLE measurements ADD COLUMN path TEXT")
     return conn
 
 
@@ -145,19 +149,21 @@ def needing_measurement(conn: sqlite3.Connection, kinds: tuple[str, ...] = ev.KI
 
 
 def save_measurement(conn: sqlite3.Connection, event_id: int, pair: str, status: str,
-                     abnormal: dict | None = None, tradability: dict | None = None) -> None:
+                     abnormal: dict | None = None, tradability: dict | None = None,
+                     path: list | None = None) -> None:
     conn.execute(
-        "INSERT INTO measurements (event_id, pair, status, abnormal, tradability, method, computed_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (event_id) DO UPDATE SET pair = excluded.pair, "
+        "INSERT INTO measurements (event_id, pair, status, abnormal, tradability, path, method, computed_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (event_id) DO UPDATE SET pair = excluded.pair, "
         "status = excluded.status, abnormal = excluded.abnormal, tradability = excluded.tradability, "
-        "method = excluded.method, computed_at = excluded.computed_at",
+        "path = excluded.path, method = excluded.method, computed_at = excluded.computed_at",
         (event_id, pair, status,
          json.dumps({str(h): r for h, r in abnormal.items()}) if abnormal else None,
-         json.dumps(tradability) if tradability else None, METHOD, _now()))
+         json.dumps(tradability) if tradability else None,
+         json.dumps(path) if path else None, METHOD, _now()))
     conn.commit()
 
 
-_SELECT = ("SELECT e.*, m.pair, m.status, m.abnormal, m.tradability, m.computed_at FROM events e "
+_SELECT = ("SELECT e.*, m.pair, m.status, m.abnormal, m.tradability, m.path, m.computed_at FROM events e "
            "LEFT JOIN measurements m ON m.event_id = e.id")
 
 
@@ -165,6 +171,7 @@ def _decode(r: sqlite3.Row) -> dict:
     d = dict(r)
     d["abnormal"] = json.loads(d["abnormal"]) if d["abnormal"] else None
     d["tradability"] = json.loads(d["tradability"]) if d["tradability"] else None
+    d["path"] = json.loads(d["path"]) if d["path"] else None
     d["status"] = d["status"] or "unmeasured"
     return d
 

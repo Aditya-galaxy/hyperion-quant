@@ -19,3 +19,6 @@ hyperion-events = "event_study.cli:main"
 
 [tool.setuptools]
 packages = ["event_study"]
+
+[tool.setuptools.package-data]
+event_study = ["site_template.html"]

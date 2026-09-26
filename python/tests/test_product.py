@@ -213,3 +213,73 @@ def test_fetch_new_stops_at_the_first_page_with_nothing_new(monkeypatch):
     got = ev.fetch_new(known, datetime(2000, 1, 1, tzinfo=timezone.utc))
     assert [n["id"] for n in got] == [n["id"] for n in NOTICES[:5]]
     assert len(asked) == 2
+
+
+# ── price paths ──────────────────────────────────────────────────────────────
+
+def test_price_path_is_relative_to_the_last_price_before_the_notice():
+    s = spike(100.0, 130.0, 120.0)                        # jumps in the second after the notice
+    path = study.price_path(event(), s, offsets=(-60, 0, 1, 2, 60))
+    assert path == [0.0, 0.0, 0.0, 0.2, 0.2]              # +1 s bar is still open at +1 s
+
+
+def test_price_path_marks_stale_stretches():
+    times = T0 - 400 + np.arange(401, dtype=float)       # trading stops at the notice
+    s = prices.Series(open_s=times, close=np.full(times.size, 10.0))
+    assert study.price_path(event(), s, offsets=(0, 60, 200)) == [0.0, 0.0, None]
+
+
+def test_ingest_stores_the_path(conn, tmp_path):
+    e = _one_listing(conn)
+    pipeline.ingest(conn, tmp_path, datetime(2000, 1, 1, tzinfo=timezone.utc), fetch=None,
+                    load=fake_loader, now=e.at + timedelta(days=5), pause=0)
+    (row,) = store.rows(conn, ("listing",))
+    assert len(row["path"]) == len(study.PATH_OFFSETS)
+    assert row["path"][study.PATH_OFFSETS.index(10)] == pytest.approx(0.20)
+
+
+def test_old_databases_gain_the_path_column(tmp_path):
+    import sqlite3
+    old = tmp_path / "old.db"
+    c = sqlite3.connect(old)
+    c.executescript(store.SCHEMA.replace("    path         TEXT,                    -- coin return at study.PATH_OFFSETS, for charts\n", ""))
+    c.close()
+    conn = store.connect(old)
+    assert "path" in {r[1] for r in conn.execute("PRAGMA table_info(measurements)")}
+    conn.close()
+
+
+# ── the public site ──────────────────────────────────────────────────────────
+
+def test_site_is_built_from_the_database_and_follows_the_terms(conn, tmp_path):
+    from event_study import site
+    listings = [n for n in NOTICES if ev.classify(n["title"]) == "listing"]
+    store.add_notices(conn, "upbit", listings)
+    pipeline.ingest(conn, tmp_path, datetime(2000, 1, 1, tzinfo=timezone.utc), fetch=None,
+                    load=fake_loader, now=datetime(2030, 1, 1, tzinfo=timezone.utc), pause=0)
+    out = tmp_path / "site"
+    data = site.build(conn, out)
+
+    assert {p.name for p in out.iterdir()} == {"index.html", "data.json", "events.csv", "LICENSE-DATA.txt"}
+    block = data["kinds"]["listing"]
+    assert block["n"] >= site.MIN_EVENTS
+    assert block["abnormal"]["60"]["median"] == pytest.approx(0.20)
+    assert block["last_profitable"]["worst"]["300"] == 0          # the fake jump is over by +2 s
+    assert len(block["path"]["median"]) == len(study.PATH_OFFSETS)
+
+    page = (out / "index.html").read_text(encoding="utf-8")
+    assert "__DATA__" not in page and "Binance Vision" in page
+    published = page + (out / "data.json").read_text(encoding="utf-8") + (out / "events.csv").read_text(encoding="utf-8")
+    for n in listings:                                            # Upbit's text is linked, never copied
+        assert n["title"] not in published
+    assert "CC BY-NC-SA 4.0" in (out / "LICENSE-DATA.txt").read_text()
+    assert (out / "events.csv").read_text().startswith("id,at,source,")   # plain CSV, no comment line
+
+
+def test_kinds_with_too_few_events_get_no_summary(conn, tmp_path):
+    from event_study import site
+    _one_listing(conn)
+    pipeline.ingest(conn, tmp_path, datetime(2000, 1, 1, tzinfo=timezone.utc), fetch=None,
+                    load=fake_loader, now=datetime(2030, 1, 1, tzinfo=timezone.utc), pause=0)
+    data = site.collect(conn)
+    assert data["kinds"] == {} and len(data["events"]) == 1

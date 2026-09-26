@@ -22,12 +22,21 @@ pip install ./python
 hyperion-events ingest                    # fetch new notices, measure what's ready
 hyperion-events report --kinds listing    # reaction + "how fast would I have to be?"
 hyperion-events export --format csv > events.csv
+hyperion-events site --out site           # public static site: findings, charts, event feed
 ```
+
+**Data licence.** The code is MIT. The *data* is not: prices come from Binance
+Vision, whose archive is licensed CC BY-NC-SA 4.0 (Binance Vision Dataset Terms
+v1.0, 26 Aug 2026), and that covers anything calculated from it. So everything
+this publishes (the site, the API, public exports) is **non-commercial, credits
+Binance Vision, and carries the same licence**. Upbit's notice text is theirs:
+published output links to each notice instead of copying its title. See
+[`terms.py`](python/event_study/terms.py).
 
 **HTTP API** (`pip install "./python[api]"`):
 
 ```bash
-hyperion-events keys create alice@fund.com --plan pro    # prints the key once
+hyperion-events keys create you@lab.edu                  # free research key, printed once
 hyperion-events serve --port 8000                        # interactive docs at /docs
 curl -H "X-API-Key: hk_..." "localhost:8000/v1/stats?kind=listing&hold=300"
 ```
@@ -39,8 +48,8 @@ curl -H "X-API-Key: hk_..." "localhost:8000/v1/stats?kind=listing&hold=300"
 | `GET /v1/stats?kind=` | Price reaction by horizon, net trade return by fill delay, and the slowest fill that still paid |
 | `GET /v1/meta` | Kinds, horizons, fill delays, fees; your plan and data cutoff |
 
-The `research` plan sees events once they're 30 days old (60 requests/min);
-`pro` sees them as soon as they're measured (600/min).
+Keys are free: the `research` plan allows 60 requests a minute, `collaborator`
+600. Every response carries the data licence in an `X-Data-License` header.
 
 Everything is stored in `data/hyperion.db` (SQLite). Re-running `ingest` only
 fetches what's new; events from the last couple of days stay *pending* until

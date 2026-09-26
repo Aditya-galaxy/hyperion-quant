@@ -6,6 +6,7 @@ HYPERION EVENTS: COMMAND LINE
     hyperion-events report --kinds listing    # price reaction + how fast you'd have to be
     hyperion-events export --format csv > events.csv
     hyperion-events keys create alice@fund.com --plan pro
+    hyperion-events site --out site           # the public static site
     hyperion-events serve --port 8000         # the HTTP API (pip install "./python[api]")
 
 Everything lives in one SQLite file (--db, default data/hyperion.db) and the
@@ -112,6 +113,14 @@ def cmd_keys(args, conn) -> int:
     return 0
 
 
+def cmd_site(args, conn) -> int:
+    from . import site
+    data = site.build(conn, Path(args.out))
+    print(f"  built {args.out}/index.html: {data['totals']['measured']} measured events, "
+          f"kinds: {', '.join(data['kinds']) or 'none with enough events'}")
+    return 0
+
+
 def cmd_serve(args, conn) -> int:
     import uvicorn
 
@@ -157,6 +166,10 @@ def main(argv: list[str] | None = None) -> int:
     k = keys.add_parser("revoke")
     k.add_argument("id", type=int)
     p.set_defaults(run=cmd_keys)
+
+    p = sub.add_parser("site", help="build the public static site (findings, charts, event feed, data files)")
+    p.add_argument("--out", default="site")
+    p.set_defaults(run=cmd_site)
 
     p = sub.add_parser("serve", help="run the HTTP API")
     p.add_argument("--host", default="127.0.0.1")

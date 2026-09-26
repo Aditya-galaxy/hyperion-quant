@@ -46,11 +46,14 @@ def setup(tmp_path):
         "gone": add_event(conn, "DDD", "listing", 40, status="no_pair"),
         "recent_listing": add_event(conn, "EEE", "listing", 5, move=0.30),
     }
-    keys = {"pro": store.create_key(conn, "pro@fund.com", "pro"),
-            "research": store.create_key(conn, "student@uni.edu", "research")}
+    keys = {"pro": store.create_key(conn, "lab@uni.edu", "collaborator"),
+            "research": store.create_key(conn, "student@uni.edu", "research"),
+            "delayed": store.create_key(conn, "later@licence.com", "delayed")}
     conn.close()
     clock = [0.0]
-    client = TestClient(api.create_app(path, now=lambda: NOW, limiter=api.RateLimiter(lambda: clock[0])))
+    plans = {**api.PLANS, "delayed": api.Plan(delay=timedelta(days=30), per_minute=60)}
+    client = TestClient(api.create_app(path, now=lambda: NOW, limiter=api.RateLimiter(lambda: clock[0]),
+                                       plans=plans))
     return client, keys, ids, path, clock
 
 
@@ -70,13 +73,13 @@ def test_no_key_bad_key_and_bearer(setup):
     assert get(client, None, "/v1/meta").status_code == 401
     assert get(client, "hk_nope", "/v1/meta").status_code == 401
     ok = client.get("/v1/meta", headers={"Authorization": f"Bearer {keys['pro']}"})
-    assert ok.status_code == 200 and ok.json()["plan"] == "pro"
+    assert ok.status_code == 200 and ok.json()["plan"] == "collaborator"
 
 
 def test_revoked_key_is_refused(setup):
     client, keys, _, path, _ = setup
     conn = store.connect(path)
-    key_id = next(k["id"] for k in store.list_keys(conn) if k["owner"] == "pro@fund.com")
+    key_id = next(k["id"] for k in store.list_keys(conn) if k["owner"] == "lab@uni.edu")
     assert store.revoke_key(conn, key_id)
     assert not store.revoke_key(conn, key_id)
     conn.close()
@@ -92,34 +95,63 @@ def test_keys_are_stored_hashed(setup):
 
 
 # ── plans ────────────────────────────────────────────────────────────────────
+# The free plans see everything. A plan with a delay (kept for a later
+# self-hosted licence) is tested with a plan made up for the test.
 
-def test_research_plan_sees_nothing_newer_than_30_days(setup):
+def test_research_plan_sees_everything(setup):
     client, keys, ids, *_ = setup
-    research = get(client, keys["research"], "/v1/events").json()
-    pro = get(client, keys["pro"], "/v1/events").json()
-    assert ids["recent_listing"] not in [e["id"] for e in research["data"]]
-    assert ids["recent_listing"] in [e["id"] for e in pro["data"]]
-    assert research["data_until"] == (NOW - timedelta(days=30)).isoformat()
-    assert pro["data_until"] is None
+    got = get(client, keys["research"], "/v1/events").json()
+    assert ids["recent_listing"] in [e["id"] for e in got["data"]]
+    assert got["data_until"] is None
 
 
-def test_research_plan_cannot_widen_its_window(setup):
+def test_delayed_plan_sees_nothing_newer_than_its_delay(setup):
     client, keys, ids, *_ = setup
-    got = get(client, keys["research"], "/v1/events", until="2030-01-01T00:00:00").json()
+    got = get(client, keys["delayed"], "/v1/events").json()
+    assert ids["recent_listing"] not in [e["id"] for e in got["data"]]
+    assert got["data_until"] == (NOW - timedelta(days=30)).isoformat()
+
+
+def test_delayed_plan_cannot_widen_its_window(setup):
+    client, keys, ids, *_ = setup
+    got = get(client, keys["delayed"], "/v1/events", until="2030-01-01T00:00:00").json()
     assert ids["recent_listing"] not in [e["id"] for e in got["data"]]
 
 
 def test_recent_event_detail_is_gated_with_a_date(setup):
     client, keys, ids, *_ = setup
-    r = get(client, keys["research"], f"/v1/events/{ids['recent_listing']}")
+    r = get(client, keys["delayed"], f"/v1/events/{ids['recent_listing']}")
     assert r.status_code == 403 and "2026-10-21" in r.json()["detail"]
-    assert get(client, keys["pro"], f"/v1/events/{ids['recent_listing']}").status_code == 200
+    assert get(client, keys["research"], f"/v1/events/{ids['recent_listing']}").status_code == 200
 
 
 def test_stats_follow_the_plan(setup):
     client, keys, *_ = setup
-    assert get(client, keys["research"], "/v1/stats", kind="listing").json()["n"] == 2
-    assert get(client, keys["pro"], "/v1/stats", kind="listing").json()["n"] == 3
+    assert get(client, keys["delayed"], "/v1/stats", kind="listing").json()["n"] == 2
+    assert get(client, keys["research"], "/v1/stats", kind="listing").json()["n"] == 3
+
+
+# ── terms ────────────────────────────────────────────────────────────────────
+
+def test_every_response_carries_the_data_licence(setup):
+    client, keys, *_ = setup
+    for r in (client.get("/v1/health"), get(client, keys["research"], "/v1/events"),
+              get(client, None, "/v1/meta")):                      # even a refusal
+        assert r.headers["X-Data-License"] == "CC-BY-NC-SA-4.0"
+        assert "creativecommons.org/licenses/by-nc-sa/4.0" in r.headers["Link"]
+    meta = get(client, keys["research"], "/v1/meta").json()
+    assert "Binance Vision" in meta["attribution"] and meta["license"] == "CC-BY-NC-SA-4.0"
+
+
+def test_notice_titles_are_not_served_but_linked(setup):
+    client, keys, ids, *_ = setup
+    listed = get(client, keys["research"], "/v1/events").json()["data"][0]
+    one = get(client, keys["research"], f"/v1/events/{ids['old_listing']}").json()
+    csv_text = get(client, keys["research"], "/v1/events", format="csv").text
+    for e in (listed, one):
+        assert "title" not in e and e["notice_url"].startswith("https://upbit.com/service_center/notice?id=")
+    assert "notice" not in csv_text.split("\n", 1)[1].replace("notice?id", "")   # no title text in rows
+    assert csv_text.startswith("id,at,source,source_id,symbol,kind,notice_url,")
 
 
 # ── rate limit ───────────────────────────────────────────────────────────────

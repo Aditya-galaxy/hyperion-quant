@@ -1,7 +1,7 @@
 """
 HYPERION EVENTS: HTTP API
 =========================
-Read-only access to the event database for paying customers.
+Read-only access to the event database, for non-commercial research.
 
     GET /v1/health                  no key needed
     GET /v1/meta                    kinds, horizons, fill delays; your plan and data cutoff
@@ -10,9 +10,14 @@ Read-only access to the event database for paying customers.
     GET /v1/stats?kind=listing      price reaction and "how fast would you have to be?"
 
 Every request but /health carries a key, as `X-API-Key: hk_...` or
-`Authorization: Bearer hk_...`. The plan on the key sets a request rate and
-how recent the data it can see is: the research plan sees events once they
-are 30 days old, pro sees them as soon as they're measured.
+`Authorization: Bearer hk_...`. Keys are free; they exist so a heavy caller
+can be slowed or cut off, and so every caller has been told the terms. The
+plan on a key sets its request rate, and can hold back recent events (a
+`delay`), which nothing uses today but a self-hosted licence may later.
+
+Every response carries the data licence (see terms.py): CC BY-NC-SA 4.0,
+credited to Binance Vision. Notice titles are Upbit's text and are not served;
+each event links to its notice instead.
 
 Run with `hyperion-events serve`. The rate limit is kept in memory, per
 process: one process, or a shared store in front, before scaling out.
@@ -37,7 +42,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 
 from . import events as ev
-from . import store, study, summary, tradability
+from . import store, study, summary, terms, tradability
 
 
 @dataclass(frozen=True)
@@ -47,12 +52,12 @@ class Plan:
 
 
 PLANS = {
-    "research": Plan(delay=timedelta(days=30), per_minute=60),
-    "pro": Plan(delay=timedelta(0), per_minute=600),
+    "research": Plan(delay=timedelta(0), per_minute=60),        # anyone who asks
+    "collaborator": Plan(delay=timedelta(0), per_minute=600),   # bulk pulls, by arrangement
 }
 
 MAX_PAGE = 500
-PUBLIC_FIELDS = ("id", "at", "source", "source_id", "symbol", "kind", "title", "pair", "status")
+PUBLIC_FIELDS = ("id", "at", "source", "source_id", "symbol", "kind", "pair", "status")
 
 
 class RateLimiter:
@@ -117,6 +122,7 @@ def _kinds(kind: list[str] | None) -> tuple[str, ...]:
 
 def _public(row: dict, full: bool) -> dict:
     out = {f: row[f] for f in PUBLIC_FIELDS}
+    out["notice_url"] = terms.notice_url(row["source"], row["source_id"])
     out["abnormal"] = row["abnormal"]
     grid = row["tradability"]
     out["volume_10s"] = grid.get("volume_10s") if grid else None
@@ -126,11 +132,19 @@ def _public(row: dict, full: bool) -> dict:
 
 
 def create_app(db_path: Path | str, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-               limiter: RateLimiter | None = None) -> FastAPI:
+               limiter: RateLimiter | None = None, plans: dict[str, Plan] = PLANS) -> FastAPI:
     store.connect(db_path).close()                      # create tables once, up front
     limiter = limiter or RateLimiter()
     app = FastAPI(title="Hyperion Events", version="1",
-                  description="How crypto prices react to exchange notices, second by second.")
+                  description="How crypto prices react to exchange notices, second by second. "
+                              + terms.ATTRIBUTION)
+
+    @app.middleware("http")
+    async def licence_headers(request, call_next):
+        response = await call_next(request)
+        response.headers["X-Data-License"] = terms.DATA_LICENSE
+        response.headers["Link"] = f'<{terms.DATA_LICENSE_URL}>; rel="license"'
+        return response
 
     def db() -> Iterator:
         conn = store.connect(db_path, migrate=False)
@@ -149,9 +163,9 @@ def create_app(db_path: Path | str, now: Callable[[], datetime] = lambda: dateti
             raise HTTPException(401, "send your key as X-API-Key or Authorization: Bearer",
                                 headers={"WWW-Authenticate": "Bearer"})
         row = store.find_key(conn, key)
-        if row is None or row["plan"] not in PLANS:
+        if row is None or row["plan"] not in plans:
             raise HTTPException(401, "unknown or revoked key", headers={"WWW-Authenticate": "Bearer"})
-        plan = PLANS[row["plan"]]
+        plan = plans[row["plan"]]
         allowed, remaining, retry = limiter.allow(row["id"], plan.per_minute)
         if not allowed:
             raise HTTPException(429, f"over {plan.per_minute} requests a minute",
@@ -184,6 +198,9 @@ def create_app(db_path: Path | str, now: Callable[[], datetime] = lambda: dateti
             "method": store.METHOD,
             "plan": who.plan_name,
             "data_until": who.cutoff.isoformat() if who.cutoff else None,
+            "license": terms.DATA_LICENSE,
+            "license_url": terms.DATA_LICENSE_URL,
+            "attribution": terms.ATTRIBUTION,
         }
 
     @app.get("/v1/events")
@@ -201,7 +218,7 @@ def create_app(db_path: Path | str, now: Callable[[], datetime] = lambda: dateti
                           before=_decode_cursor(cursor) if cursor else None)
         if format == "csv":
             buf = io.StringIO()
-            csv.writer(buf).writerows(summary.csv_rows(rows))
+            csv.writer(buf).writerows(summary.csv_rows(rows, public=True))
             return Response(buf.getvalue(), media_type="text/csv; charset=utf-8")
         return {
             "data": [_public(r, include_tradability) for r in rows],
@@ -215,7 +232,7 @@ def create_app(db_path: Path | str, now: Callable[[], datetime] = lambda: dateti
         if row is None:
             raise HTTPException(404, "no such event")
         if who.cutoff and datetime.fromisoformat(row["at"]) >= who.cutoff:
-            raise HTTPException(403, f"events this recent need the pro plan; on {who.plan_name} "
+            raise HTTPException(403, f"events this recent aren't included in the {who.plan_name} plan; "
                                      f"you'll see it from {(datetime.fromisoformat(row['at']) + who.plan.delay).date()}")
         return _public(row, full=True)
 

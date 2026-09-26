@@ -13,7 +13,7 @@ from dataclasses import asdict
 
 import numpy as np
 
-from . import study, tradability
+from . import study, terms, tradability
 
 
 def clean(x):
@@ -56,10 +56,15 @@ def kind_summary(rows: list[dict], kind: str, fill: str = "worst", hold: int = 3
 CSV_FIELDS = ["id", "at", "source", "source_id", "symbol", "kind", "title", "pair", "status"]
 
 
-def csv_rows(rows: list[dict]):
+def csv_rows(rows: list[dict], public: bool = False):
     """Header, then one flat row per event: identity, status, and the abnormal
-    return at every horizon (blank when unmeasured)."""
+    return at every horizon (blank when unmeasured).
+
+    `public` output is for publishing: the notice title (the exchange's own
+    text) is replaced by a link to the notice. See terms.py."""
+    fields = [f if f != "title" else "notice_url" for f in CSV_FIELDS] if public else CSV_FIELDS
     horizons = [str(h) for h in study.HORIZONS]
-    yield CSV_FIELDS + [f"abnormal_{h}s" for h in horizons]
+    yield fields + [f"abnormal_{h}s" for h in horizons]
     for r in rows:
-        yield [r[f] for f in CSV_FIELDS] + [(r["abnormal"] or {}).get(h, "") for h in horizons]
+        values = [terms.notice_url(r["source"], r["source_id"]) if f == "notice_url" else r[f] for f in fields]
+        yield values + [(r["abnormal"] or {}).get(h, "") for h in horizons]
